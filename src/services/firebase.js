@@ -18,7 +18,7 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-const app = initializeApp(firebaseConfig);
+export const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 
 // ─────────────────────────────────────────────────────────────────
@@ -26,6 +26,17 @@ export const db = getFirestore(app);
 //  idle → [mozo] → ordered → [cocina] → cooking → [cocina] → ready
 //                                                           → [mozo] → idle
 // ─────────────────────────────────────────────────────────────────
+
+/** Llama a la API de Vercel para enviar la notificación Push */
+const triggerNotification = async (tableNumber, status) => {
+  try {
+    fetch('/api/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tableNumber, status })
+    }).catch((e) => console.warn('Notif API err (esperado en local dev):', e));
+  } catch (e) {}
+};
 
 /** MOZO: Mesa tiene pedido (acaba de tomar la comanda) */
 export const markTableOrdered = async (tableNumber) => {
@@ -37,6 +48,7 @@ export const markTableOrdered = async (tableNumber) => {
     readyAt: null,
     acknowledgedAt: null,
   });
+  triggerNotification(tableNumber, 'ordered');
 };
 
 /** COCINA: Confirma que recibió el pedido y está cocinando */
@@ -55,6 +67,7 @@ export const markTableReady = async (tableNumber) => {
     status: 'ready',
     readyAt: Timestamp.now(),
   });
+  triggerNotification(tableNumber, 'ready');
 };
 
 /** MOZO: Confirma que va a buscar el pedido → mesa vuelve a libre */
