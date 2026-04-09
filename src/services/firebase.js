@@ -22,21 +22,131 @@ export const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 
 // ─────────────────────────────────────────────────────────────────
-//  FLUJO COMPLETO:
-//  idle → [mozo] → ordered → [cocina] → cooking → [cocina] → ready
-//                                                           → [mozo] → idle
+//  FLUJO POR ÁREA:
+//  idle → [mozo] → ordered → [cocina/jugo] → cooking → [cocina/jugo] → ready
+//                                                                    → [mozo] → idle
+//
+//  Cada mesa tiene: status_cocina y status_jugo (independientes)
 // ─────────────────────────────────────────────────────────────────
 
 /** Llama a la API de Vercel para enviar la notificación Push */
-const triggerNotification = async (tableNumber, status) => {
+const triggerNotification = async (tableNumber, status, area = '') => {
   try {
+    // Evitar el error 404 en la consola durante desarrollo local
+    if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+      return; 
+    }
+
     fetch('/api/notify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tableNumber, status })
-    }).catch((e) => console.warn('Notif API err (esperado en local dev):', e));
+      body: JSON.stringify({ tableNumber, status, area })
+    }).catch(() => {}); // Ocultar errores si falla
   } catch (e) {}
 };
+
+// ═══════════════════════════════════════════════════════════════
+//  FUNCIONES POR ÁREA (NUEVO SISTEMA)
+// ═══════════════════════════════════════════════════════════════
+
+/** MOZO: Registra pedido para un área específica */
+export const markTableOrderedForArea = async (tableNumber, area, waiterName = '') => {
+  const ref = doc(db, 'tables', String(tableNumber));
+  const now = Timestamp.now();
+
+  if (area === 'ambos') {
+    await updateDoc(ref, {
+      status_cocina: 'ordered',
+      status_jugo: 'ordered',
+      orderedAt_cocina: now,
+      orderedAt_jugo: now,
+      cookingAt_cocina: null,
+      cookingAt_jugo: null,
+      readyAt_cocina: null,
+      readyAt_jugo: null,
+      waiterName: waiterName || '',
+      // Legacy
+      status: 'ordered',
+      orderedAt: now,
+    });
+    triggerNotification(tableNumber, 'ordered', 'ambos');
+  } else if (area === 'cocina') {
+    await updateDoc(ref, {
+      status_cocina: 'ordered',
+      orderedAt_cocina: now,
+      cookingAt_cocina: null,
+      readyAt_cocina: null,
+      waiterName: waiterName || '',
+      // Legacy
+      status: 'ordered',
+      orderedAt: now,
+    });
+    triggerNotification(tableNumber, 'ordered', 'cocina');
+  } else if (area === 'jugo') {
+    await updateDoc(ref, {
+      status_jugo: 'ordered',
+      orderedAt_jugo: now,
+      cookingAt_jugo: null,
+      readyAt_jugo: null,
+      waiterName: waiterName || '',
+      // Legacy (solo si cocina está idle)
+      status: 'ordered',
+      orderedAt: now,
+    });
+    triggerNotification(tableNumber, 'ordered', 'jugo');
+  }
+};
+
+/** COCINA/JUGO: Confirma que recibió el pedido y está preparando */
+export const confirmCookingForArea = async (tableNumber, area) => {
+  const ref = doc(db, 'tables', String(tableNumber));
+  const field = area === 'jugo' ? 'status_jugo' : 'status_cocina';
+  const cookingField = area === 'jugo' ? 'cookingAt_jugo' : 'cookingAt_cocina';
+  await updateDoc(ref, {
+    [field]: 'cooking',
+    [cookingField]: Timestamp.now(),
+  });
+};
+
+/** COCINA/JUGO: El pedido está listo para entregar */
+export const markReadyForArea = async (tableNumber, area) => {
+  const ref = doc(db, 'tables', String(tableNumber));
+  const field = area === 'jugo' ? 'status_jugo' : 'status_cocina';
+  const readyField = area === 'jugo' ? 'readyAt_jugo' : 'readyAt_cocina';
+  await updateDoc(ref, {
+    [field]: 'ready',
+    [readyField]: Timestamp.now(),
+  });
+  triggerNotification(tableNumber, 'ready', area);
+};
+
+/** MOZO: Confirma que recogió el pedido de un área → esa área vuelve a idle */
+export const acknowledgeForArea = async (tableNumber, area) => {
+  const ref = doc(db, 'tables', String(tableNumber));
+  const field = area === 'jugo' ? 'status_jugo' : 'status_cocina';
+  await updateDoc(ref, {
+    [field]: 'idle',
+    [`orderedAt_${area === 'jugo' ? 'jugo' : 'cocina'}`]: null,
+    [`cookingAt_${area === 'jugo' ? 'jugo' : 'cocina'}`]: null,
+    [`readyAt_${area === 'jugo' ? 'jugo' : 'cocina'}`]: null,
+  });
+};
+
+/** Cancela el pedido de un área específica */
+export const resetTableForArea = async (tableNumber, area) => {
+  const ref = doc(db, 'tables', String(tableNumber));
+  const field = area === 'jugo' ? 'status_jugo' : 'status_cocina';
+  await updateDoc(ref, {
+    [field]: 'idle',
+    [`orderedAt_${area === 'jugo' ? 'jugo' : 'cocina'}`]: null,
+    [`cookingAt_${area === 'jugo' ? 'jugo' : 'cocina'}`]: null,
+    [`readyAt_${area === 'jugo' ? 'jugo' : 'cocina'}`]: null,
+  });
+};
+
+// ═══════════════════════════════════════════════════════════════
+//  FUNCIONES LEGACY (mantienen compatibilidad)
+// ═══════════════════════════════════════════════════════════════
 
 /** MOZO: Mesa tiene pedido (acaba de tomar la comanda) */
 export const markTableOrdered = async (tableNumber) => {
@@ -108,6 +218,15 @@ export const initializeTables = async () => {
         cookingAt: null,
         readyAt: null,
         acknowledgedAt: null,
+        // Nuevos campos para doble estado
+        status_cocina: 'idle',
+        status_jugo: 'idle',
+        orderedAt_cocina: null,
+        orderedAt_jugo: null,
+        cookingAt_cocina: null,
+        cookingAt_jugo: null,
+        readyAt_cocina: null,
+        readyAt_jugo: null,
       },
       { merge: true }
     );

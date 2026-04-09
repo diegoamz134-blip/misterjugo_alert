@@ -39,22 +39,37 @@ export const useTables = () => {
     return () => unsubscribe();
   }, []);
 
-  const getTable = (tableNumber) =>
-    tables[String(tableNumber)] || { status: 'idle', tableNumber };
+  const getTable = (tableNumber) => {
+    const t = tables[String(tableNumber)] || { status: 'idle', tableNumber };
+    // Fallback: si no tiene los nuevos campos, usar el campo legacy
+    return {
+      ...t,
+      status_cocina: t.status_cocina || (t.status !== 'idle' ? t.status : 'idle'),
+      status_jugo: t.status_jugo || 'idle',
+    };
+  };
 
-  const all = Object.values(tables);
+  const all = Object.values(tables).map((t) => ({
+    ...t,
+    status_cocina: t.status_cocina || (t.status !== 'idle' ? t.status : 'idle'),
+    status_jugo: t.status_jugo || 'idle',
+  }));
 
-  /** Mozo acaba de tomar el pedido — esperando que cocina confirme */
+  // ── Filtros LEGACY (compatibilidad) ──
   const orderedTables = sortByNumber(all.filter((t) => t.status === 'ordered'));
-
-  /** Cocina confirmó — pedido en preparación */
   const cookingTables = sortByNumber(all.filter((t) => t.status === 'cooking'));
+  const readyTables   = sortByNumber(all.filter((t) => t.status === 'ready'));
+  const activeTables  = sortByNumber(all.filter((t) => t.status !== 'idle'));
 
-  /** Pedido listo — mozo debe ir a buscar */
-  const readyTables = sortByNumber(all.filter((t) => t.status === 'ready'));
+  // ── Filtros COCINA ──
+  const orderedTablesKitchen = sortByNumber(all.filter((t) => t.status_cocina === 'ordered'));
+  const cookingTablesKitchen = sortByNumber(all.filter((t) => t.status_cocina === 'cooking'));
+  const readyTablesKitchen   = sortByNumber(all.filter((t) => t.status_cocina === 'ready'));
 
-  /** Mesas activas (cualquier estado distinto de idle) */
-  const activeTables = sortByNumber(all.filter((t) => t.status !== 'idle'));
+  // ── Filtros JUGO ──
+  const orderedTablesJugo = sortByNumber(all.filter((t) => t.status_jugo === 'ordered'));
+  const cookingTablesJugo = sortByNumber(all.filter((t) => t.status_jugo === 'cooking'));
+  const readyTablesJugo   = sortByNumber(all.filter((t) => t.status_jugo === 'ready'));
 
   const isInitialized = all.length > 0;
 
@@ -62,10 +77,19 @@ export const useTables = () => {
     tables,
     loading,
     getTable,
+    // Legacy
     orderedTables,
     cookingTables,
     readyTables,
     activeTables,
+    // Cocina
+    orderedTablesKitchen,
+    cookingTablesKitchen,
+    readyTablesKitchen,
+    // Jugo
+    orderedTablesJugo,
+    cookingTablesJugo,
+    readyTablesJugo,
     isInitialized,
   };
 };

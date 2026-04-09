@@ -32,6 +32,21 @@ body {
   animation: alert-pulse 1.3s ease-in-out infinite;
 }
 
+/* Alert pulse green for juice ready */
+@keyframes alert-pulse-green {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 12px rgba(16, 185, 129, 0);
+    transform: scale(1.04);
+  }
+}
+.alert-pulse-green {
+  animation: alert-pulse-green 1.3s ease-in-out infinite;
+}
+
 /* Slide up for alert cards */
 @keyframes slide-up {
   from {

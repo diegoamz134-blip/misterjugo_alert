@@ -1,4 +1,4 @@
-import { ArrowRight, ChefHat, BellRing } from 'lucide-react';
+import { ArrowRight, ChefHat, BellRing, GlassWater } from 'lucide-react';
 import logo from '../assets/misterjugo.jpg';
 
 export default function HomeView({ onSelect }) {
@@ -15,7 +15,7 @@ export default function HomeView({ onSelect }) {
         <h1 className="text-5xl font-black text-white tracking-tight">
           Mister<span className="text-orange-500">Jugo</span>
         </h1>
-        <p className="text-slate-400 mt-2 text-base">Sistema de Avisos de Cocina</p>
+        <p className="text-slate-400 mt-2 text-base">Sistema de Avisos de Cocina y Jugos</p>
       </div>
 
       {/* Selección de rol */}
@@ -48,6 +48,30 @@ export default function HomeView({ onSelect }) {
           </div>
         </button>
 
+        {/* Juguero */}
+        <button
+          onClick={() => onSelect('jugo')}
+          className="w-full p-5 bg-gradient-to-r from-emerald-500 to-emerald-600
+                     hover:from-emerald-400 hover:to-emerald-500
+                     rounded-3xl text-white text-left
+                     transition-all duration-200 active:scale-98
+                     shadow-xl shadow-emerald-500/30
+                     border border-emerald-400/20 group"
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-200">
+              <GlassWater size={30} className="text-white" />
+            </div>
+            <div>
+              <div className="font-extrabold text-xl leading-tight">Soy Juguero</div>
+              <div className="text-emerald-100 text-sm mt-0.5">Panel de jugos y bebidas</div>
+            </div>
+            <div className="ml-auto opacity-60 group-hover:opacity-100 group-hover:translate-x-1 transition-all">
+              <ArrowRight size={20} className="text-emerald-200" />
+            </div>
+          </div>
+        </button>
+
         {/* Mozo */}
         <button
           onClick={() => onSelect('waiter')}
@@ -63,7 +87,7 @@ export default function HomeView({ onSelect }) {
             </div>
             <div>
               <div className="font-extrabold text-xl leading-tight">Soy Mozo</div>
-              <div className="text-slate-400 text-sm mt-0.5">Recibir avisos de cocina</div>
+              <div className="text-slate-400 text-sm mt-0.5">Recibir avisos de cocina y jugos</div>
             </div>
             <div className="ml-auto opacity-60 group-hover:opacity-100 group-hover:translate-x-1 transition-all">
               <ArrowRight size={20} className="text-slate-500" />
@@ -72,7 +96,7 @@ export default function HomeView({ onSelect }) {
         </button>
       </div>
 
-      <p className="mt-12 text-slate-700 text-xs">v1.0 · 3 Pisos · 40 Mesas</p>
+      <p className="mt-12 text-slate-700 text-xs">v2.0 · 3 Pisos · 40 Mesas · Cocina + Jugos</p>
     </div>
   );
 }
