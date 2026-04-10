@@ -66,9 +66,9 @@ export default async function handler(req, res) {
       android: {
         priority: 'high',
         notification: {
-          sound: 'default',
+          sound: role === 'waiter' ? 'alert' : 'kitchen',
           priority: 'high',
-          channelId: 'kitchen-alerts',
+          channelId: role === 'waiter' ? 'waiter-alerts' : 'kitchen-alerts',
         },
       },
     }));

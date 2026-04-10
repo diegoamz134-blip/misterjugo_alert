@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "320930129162",
+    "project_id": "misterjugo-d58be",
+    "storage_bucket": "misterjugo-d58be.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:320930129162:android:500728498f8b8132e7c6f3",
+        "android_client_info": {
+          "package_name": "com.misterjugo.alertas"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCKh8dtch7yVRoFU22krt9kzMNQQbjDlJo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">MisterJugo</string>
+    <string name="title_activity_main">MisterJugo</string>
+    <string name="package_name">com.misterjugo.alertas</string>
+    <string name="custom_url_scheme">com.misterjugo.alertas</string>
+</resources>

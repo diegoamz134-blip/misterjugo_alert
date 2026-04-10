@@ -1,12 +1,39 @@
+import { Capacitor } from '@capacitor/core';
+import { NativeAudio } from '@capacitor-community/native-audio';
+
+// ─────────────────────────────────────────────────────────────────
+//  INICIALIZACIÓN DE NATIVE AUDIO
+// ─────────────────────────────────────────────────────────────────
+let isNativeReady = false;
+
+export const initNativeAudio = async () => {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      await NativeAudio.preload({ assetId: 'alert', assetPath: 'public/sounds/alert.wav', audioChannelNum: 1, isUrl: false });
+      await NativeAudio.preload({ assetId: 'kitchen', assetPath: 'public/sounds/kitchen.wav', audioChannelNum: 1, isUrl: false });
+      await NativeAudio.preload({ assetId: 'confirm', assetPath: 'public/sounds/confirm.wav', audioChannelNum: 1, isUrl: false });
+      isNativeReady = true;
+      console.log('NativeAudio preloaded successfully.');
+    } catch (e) {
+      console.warn('Error preloading NativeAudio:', e);
+    }
+  }
+};
+
 // ─────────────────────────────────────────────────────────────────
 //  SONIDOS PARA MOZOS
 // ─────────────────────────────────────────────────────────────────
 
 /**
  * Alerta FUERTE para mozos cuando el pedido está listo.
- * 5 tonos ascendentes con onda senoidal clara.
  */
-export const playAlertSound = () => {
+export const playAlertSound = async () => {
+  if (Capacitor.isNativePlatform() && isNativeReady) {
+    NativeAudio.play({ assetId: 'alert' });
+    return;
+  }
+
+  // Fallback Web Audio
   try {
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     if (!AudioCtx) return;
@@ -53,20 +80,19 @@ export const vibrateDevice = () => {
 
 /**
  * Alerta MUY FUERTE para cocina cuando llega un pedido nuevo.
- *
- * Diseñada para ambientes con ruido:
- *  - Onda cuadrada (square) → más agresiva y penetrante que sine
- *  - Ganancia máxima (0.9) → lo más alto posible sin distorsión
- *  - Patrón: 3 ráfagas de 3 pitidos, con pausa entre ráfagas
- *  - Total duración: ~2.5 segundos imposible de ignorar
  */
-export const playKitchenOrderSound = () => {
+export const playKitchenOrderSound = async () => {
+  if (Capacitor.isNativePlatform() && isNativeReady) {
+    NativeAudio.play({ assetId: 'kitchen' });
+    return;
+  }
+
+  // Fallback Web Audio
   try {
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     if (!AudioCtx) return;
     const ctx = new AudioCtx();
 
-    // Compresor para maximizar el volumen percibido sin clipear
     const compressor = ctx.createDynamicsCompressor();
     compressor.threshold.value = -6;
     compressor.knee.value = 3;
@@ -76,7 +102,6 @@ export const playKitchenOrderSound = () => {
     compressor.connect(ctx.destination);
 
     const playBurst = (startTime, freq, dur = 0.12) => {
-      // Oscilador principal (square = duro y cortante)
       const osc1 = ctx.createOscillator();
       const gain1 = ctx.createGain();
       osc1.type = 'square';
@@ -87,32 +112,17 @@ export const playKitchenOrderSound = () => {
       gain1.connect(compressor);
       osc1.start(startTime);
       osc1.stop(startTime + dur);
-
-      // Segundo oscilador en armónico (refuerza la presencia)
-      const osc2 = ctx.createOscillator();
-      const gain2 = ctx.createGain();
-      osc2.type = 'sawtooth';
-      osc2.frequency.value = freq * 2;
-      gain2.gain.setValueAtTime(0.4, startTime);
-      gain2.gain.exponentialRampToValueAtTime(0.001, startTime + dur);
-      osc2.connect(gain2);
-      gain2.connect(compressor);
-      osc2.start(startTime);
-      osc2.stop(startTime + dur);
     };
 
-    // ── Ráfaga 1 ──
     const t = ctx.currentTime;
     playBurst(t + 0.00, 880);
     playBurst(t + 0.15, 1100);
     playBurst(t + 0.30, 880);
 
-    // ── Ráfaga 2 (pausa 0.2s) ──
     playBurst(t + 0.65, 1100);
     playBurst(t + 0.80, 1320);
     playBurst(t + 0.95, 1100);
 
-    // ── Ráfaga 3 (pausa 0.2s): más aguda, el toque final ──
     playBurst(t + 1.30, 1320);
     playBurst(t + 1.45, 1600);
     playBurst(t + 1.60, 1320);
@@ -124,9 +134,14 @@ export const playKitchenOrderSound = () => {
 
 /**
  * Sonido suave de confirmación para mozos
- * (cuando cocina confirma que está cocinando)
  */
-export const playSoftConfirmSound = () => {
+export const playSoftConfirmSound = async () => {
+  if (Capacitor.isNativePlatform() && isNativeReady) {
+    NativeAudio.play({ assetId: 'confirm' });
+    return;
+  }
+
+  // Fallback Web Audio
   try {
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     if (!AudioCtx) return;

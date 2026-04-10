@@ -4,6 +4,7 @@ import KitchenView from './views/KitchenView';
 import WaiterView from './views/WaiterView';
 import JugoView from './views/JugoView';
 import WaiterNameScreen from './components/WaiterNameScreen';
+import { useNativePush } from './hooks/useNativePush';
 
 const STORAGE_KEY      = 'misterjugo_mode';
 const WAITER_NAME_KEY  = 'misterjugo_waiter_name';
@@ -11,6 +12,10 @@ const WAITER_NAME_KEY  = 'misterjugo_waiter_name';
 export default function App() {
   const [mode, setMode] = useState(() => localStorage.getItem(STORAGE_KEY));
   const [waiterName, setWaiterName] = useState(() => localStorage.getItem(WAITER_NAME_KEY));
+
+  // Registrar Token de Notificaciones Push Nativas si hay un modo seleccionado
+  useNativePush(mode);
+
 
   const selectMode = (selectedMode) => {
     localStorage.setItem(STORAGE_KEY, selectedMode);
