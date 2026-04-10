@@ -15,6 +15,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overscroll-behavior: none;
+  padding-top: max(env(safe-area-inset-top), 35px);
 }
 
 /* Alert pulse for ready tables */
