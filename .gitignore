@@ -10,6 +10,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+dev-dist
 *.local
 .env
 
@@ -23,3 +24,17 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Android build artifacts (auto-generados, no subir)
+android/app/build/
+android/build/
+android/.gradle/
+android/local.properties
+
+# APKs (archivos binarios pesados, no van en git)
+*.apk
+*.aab
+
+# Firebase — contiene claves privadas, NO subir
+# (el google-services.json se configura en cada entorno)
+# android/app/google-services.json

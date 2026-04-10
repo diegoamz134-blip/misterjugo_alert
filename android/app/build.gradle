@@ -40,6 +40,13 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
+
+    // Firebase Cloud Messaging — necesario para MisterJugoFCMService.java
+    implementation platform('com.google.firebase:firebase-bom:33.7.0')
+    implementation 'com.google.firebase:firebase-messaging'
+
+    // AndroidX annotations (@NonNull, etc.) usadas en el servicio
+    implementation 'androidx.annotation:annotation:1.9.1'
 }
 
 apply from: 'capacitor.build.gradle'

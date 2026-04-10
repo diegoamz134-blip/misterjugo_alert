@@ -5,6 +5,7 @@ import WaiterView from './views/WaiterView';
 import JugoView from './views/JugoView';
 import WaiterNameScreen from './components/WaiterNameScreen';
 import { useNativePush } from './hooks/useNativePush';
+import { useLocalNotifications } from './hooks/useLocalNotifications';
 
 const STORAGE_KEY      = 'misterjugo_mode';
 const WAITER_NAME_KEY  = 'misterjugo_waiter_name';
@@ -15,6 +16,8 @@ export default function App() {
 
   // Registrar Token de Notificaciones Push Nativas si hay un modo seleccionado
   useNativePush(mode);
+  // Inicializar permisos y canales de notificaciones locales (bandeja del sistema)
+  useLocalNotifications();
 
 
   const selectMode = (selectedMode) => {

@@ -46,31 +46,25 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, noDevices: true });
     }
 
-    // Construir los mensajes FCM
+    // Construir los mensajes FCM — SOLO DATA PAYLOAD (sin notification block)
+    // CRÍTICO: Si incluyes "notification", Android en background lo intercepta
+    // y NO llama a onMessageReceived(). Así perdemos el control de la pantalla.
+    // Con solo "data", siempre se llama onMessageReceived() sin importar el estado.
     const messages = snap.docs.map((doc) => ({
       token: doc.data().token,
-      notification: { title, body },
-      webpush: {
-        notification: {
-          title,
-          body,
-          icon: '/icons/icon-192.png',
-          badge: '/icons/icon-192.png',
-          requireInteraction: true,
-          tag: `table-alert-${tableNumber}`,
-          renotify: true,
-          vibrate: [400, 150, 400, 150, 700],
-        },
-        fcm_options: { link: '/' },
+
+      // 🔑 SIN bloque "notification" — nuestro MisterJugoFCMService.java lo crea
+      data: {
+        title,
+        body,
+        role,
+        tableNumber: String(tableNumber),
       },
+
       android: {
+        // high = despierta el dispositivo aunque esté dormido/bloqueado
         priority: 'high',
         ttl: 0,
-        notification: {
-          sound: role === 'waiter' ? 'alert' : 'kitchen',
-          channelId: role === 'waiter' ? 'waiter-alerts' : 'kitchen-alerts',
-          visibility: 'public',
-        },
       },
     }));
 

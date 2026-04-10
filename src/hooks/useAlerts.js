@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { playAlertSound, vibrateDevice, playKitchenOrderSound, playSoftConfirmSound } from '../services/audio';
+import { mostrarNotificacionLocal } from './useLocalNotifications';
 
 const speakAcknowledge = (tableNumber, waiterName, area) => {
   try {
@@ -39,8 +40,15 @@ export const useWaiterAlerts = (readyTables, cookingTables) => {
     // ¿Nueva mesa lista?
     for (const id of currentReady) {
       if (!prevReadyRef.current.has(id)) {
+        const table = readyTables.find((t) => t.id === id);
+        const num = table?.tableNumber || id;
         playAlertSound();
         vibrateDevice();
+        mostrarNotificacionLocal(
+          `¡Mesa ${num} Lista!`,
+          'El pedido está listo para entregar. ¡Vamos!',
+          'waiter-alerts'
+        );
         break;
       }
     }
@@ -157,7 +165,14 @@ export const useKitchenAlerts = (orderedTables, readyTables) => {
     }
     for (const id of currentOrdered) {
       if (!prevOrderedRef.current.has(id)) {
+        const table = orderedTables.find((t) => t.id === id);
+        const num = table?.tableNumber || id;
         playKitchenOrderSound(); // sonido fuerte para cocina ruidosa
+        mostrarNotificacionLocal(
+          `🍳 Nuevo Pedido · Mesa ${num}`,
+          'El mozo registró un pedido nuevo.',
+          'kitchen-alerts'
+        );
         break;
       }
     }
@@ -202,7 +217,14 @@ export const useJugoAlerts = (orderedTablesJugo, readyTablesJugo) => {
     }
     for (const id of currentOrdered) {
       if (!prevOrderedRef.current.has(id)) {
+        const table = orderedTablesJugo.find((t) => t.id === id);
+        const num = table?.tableNumber || id;
         playKitchenOrderSound();
+        mostrarNotificacionLocal(
+          `🥤 Nuevo Jugo · Mesa ${num}`,
+          'El mozo registró un pedido nuevo.',
+          'kitchen-alerts'
+        );
         break;
       }
     }

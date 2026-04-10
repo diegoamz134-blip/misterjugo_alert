@@ -7,6 +7,8 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
+
+        <!-- Actividad principal -->
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
             android:name=".MainActivity"
@@ -20,6 +22,45 @@
             </intent-filter>
         </activity>
 
+        <!--
+            CRÍTICO: Servicio en Primer Plano
+            Mantiene el proceso vivo para que los listeners de Firestore en JS
+            nunca mueran aunque el teléfono esté bloqueado.
+            android:foregroundServiceType="dataSync" permite que funcione
+            en segundo plano sin restricciones de batería.
+        -->
+        <service
+            android:name=".MisterJugoForegroundService"
+            android:foregroundServiceType="dataSync"
+            android:exported="false"
+            android:stopWithTask="false" />
+
+        <!--
+            Servicio FCM nativo como respaldo extra.
+            Maneja notificaciones con prioridad alta (priority=1000).
+        -->
+        <service
+            android:name=".MisterJugoFCMService"
+            android:exported="false">
+            <intent-filter android:priority="1000">
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!--
+            BootReceiver: reinicia el ForegroundService tras:
+            - Reinicio del dispositivo
+            - Destrucción manual del servicio
+        -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="com.misterjugo.alertas.RESTART_SERVICE" />
+            </intent-filter>
+        </receiver>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -29,11 +70,27 @@
         </provider>
     </application>
 
-    <!-- Permissions -->
+    <!-- ═══════════════ PERMISOS ═══════════════ -->
 
+    <!-- Internet (Firestore + FCM) -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Requiere permisos para despertar la pantalla con notificaciones de alta prioridad -->
+
+    <!-- Encender pantalla cuando llega una alerta -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+
+    <!-- Android 13+: obligatorio para mostrar notificaciones -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Reiniciar el servicio tras encender el teléfono -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Mantener el servicio activo en segundo plano -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
+    <!-- Notificaciones exactas (para LocalNotifications de Capacitor) -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
 </manifest>
