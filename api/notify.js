@@ -65,10 +65,11 @@ export default async function handler(req, res) {
       },
       android: {
         priority: 'high',
+        ttl: 0,
         notification: {
           sound: role === 'waiter' ? 'alert' : 'kitchen',
-          priority: 'high',
           channelId: role === 'waiter' ? 'waiter-alerts' : 'kitchen-alerts',
+          visibility: 'public',
         },
       },
     }));
