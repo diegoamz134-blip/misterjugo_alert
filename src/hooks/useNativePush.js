@@ -4,7 +4,7 @@ import { PushNotifications } from '@capacitor/push-notifications';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../services/firebase';
 
-export const useNativePush = (role) => {
+export const useNativePush = (role, waiterName = null) => {
   useEffect(() => {
     // Solo registrar si estamos en Android/iOS nativo y tenemos un rol definido
     if (!Capacitor.isNativePlatform() || !role) return;
@@ -23,7 +23,6 @@ export const useNativePush = (role) => {
         }
 
         // Crear Canales de Notificación para Android 8+
-        // IMPORTANTE: Android requiere canales para reproducir alertas en Foreground/Background
         PushNotifications.createChannel({
           id: 'kitchen-alerts',
           name: 'Alertas de Cocina y Jugo',
@@ -47,17 +46,27 @@ export const useNativePush = (role) => {
         // Limpiar listeners anteriores para no duplicarlos
         await PushNotifications.removeAllListeners();
 
-        // 1. Cuando Firestore nos devuelve el Token exitosamente
+        // Cuando Firebase devuelve el token del dispositivo
         PushNotifications.addListener('registration', async (token) => {
           console.log('Firebase Push Token registrado:', token.value);
-          // Guardamos en la base de datos de MisterJugo
           const deviceRef = doc(db, 'devices', token.value);
-          await setDoc(deviceRef, {
+
+          // Datos base del dispositivo
+          const deviceData = {
             token: token.value,
             role: role,
             updatedAt: serverTimestamp(),
-            platform: Capacitor.getPlatform()
-          }, { merge: true });
+            platform: Capacitor.getPlatform(),
+          };
+
+          // Si es mozo, guardar su nombre para poder enviarle FCM personalizado
+          // Esto permite que solo el mozo dueño del pedido reciba la alerta
+          if (role === 'waiter' && waiterName) {
+            deviceData.waiterName = waiterName;
+          }
+
+          await setDoc(deviceRef, deviceData, { merge: true });
+          console.log('Dispositivo registrado:', { role, waiterName });
         });
 
         PushNotifications.addListener('registrationError', (error) => {
@@ -69,7 +78,7 @@ export const useNativePush = (role) => {
           console.log('Notificación recibida en primer plano:', notification);
         });
 
-        // Finalmente registrarse a Firebase Messaging
+        // Registrarse a Firebase Messaging
         await PushNotifications.register();
       } catch (error) {
         console.error('Error inicializando PushNotifications', error);
@@ -78,5 +87,6 @@ export const useNativePush = (role) => {
 
     setupPush();
 
-  }, [role]);
+  // Volver a registrar si cambia el nombre del mozo (cambió de nombre en la app)
+  }, [role, waiterName]);
 };

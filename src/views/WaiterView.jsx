@@ -21,7 +21,7 @@ export default function WaiterView({ onChangeMode, waiterName, onChangeName }) {
     isInitialized
   } = useTables();
 
-  useWaiterDualAlerts(readyTablesKitchen, cookingTablesKitchen, readyTablesJugo, cookingTablesJugo);
+  useWaiterDualAlerts(readyTablesKitchen, cookingTablesKitchen, readyTablesJugo, cookingTablesJugo, waiterName);
 
   const [selectedTable, setSelectedTable] = useState(null);
 

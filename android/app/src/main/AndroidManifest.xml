@@ -93,4 +93,12 @@
     <!-- Notificaciones exactas (para LocalNotifications de Capacitor) -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
+    <!--
+        BUG #5 CORREGIDO: Permiso para pedir excepción de optimización de batería.
+        Sin esto, Android 12+ y fabricantes como Samsung/Xiaomi matan el proceso
+        aunque el ForegroundService esté activo. Con este permiso la app puede
+        pedir al usuario que la exima, igual que hace WhatsApp.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
 </manifest>

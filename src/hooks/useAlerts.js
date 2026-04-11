@@ -84,22 +84,38 @@ export const useWaiterAlerts = (readyTables, cookingTables) => {
  */
 export const useWaiterDualAlerts = (
   readyTablesKitchen, cookingTablesKitchen,
-  readyTablesJugo, cookingTablesJugo
+  readyTablesJugo, cookingTablesJugo,
+  waiterName = null   // Nombre del mozo actual. Solo alerta sus propias mesas.
 ) => {
   // Combinar listas con prefijo para que los IDs no colisionen
+  // Filtrar por waiterName: solo mesas que le pertenecen a este mozo
+  const perteneceAlMozo = (t) => {
+    // Si no hay nombre de mozo configurado, mostrar todo (fallback)
+    if (!waiterName) return true;
+    // Si la mesa no tiene waiterName aun, mostrar (pedido legacy o sin asignar)
+    if (!t.waiterName) return true;
+    // Solo mostrar si coincide con el mozo actual
+    return t.waiterName === waiterName;
+  };
+
   const allReady = [
-    ...readyTablesKitchen.map((t) => ({ ...t, _alertId: `k_${t.id}` })),
-    ...readyTablesJugo.map((t) => ({ ...t, _alertId: `j_${t.id}` })),
+    ...readyTablesKitchen.filter(perteneceAlMozo).map((t) => ({ ...t, _alertId: `k_${t.id}`, _area: 'cocina' })),
+    ...readyTablesJugo.filter(perteneceAlMozo).map((t) => ({ ...t, _alertId: `j_${t.id}`, _area: 'jugo' })),
   ];
   const allCooking = [
-    ...cookingTablesKitchen.map((t) => ({ ...t, _alertId: `k_${t.id}` })),
-    ...cookingTablesJugo.map((t) => ({ ...t, _alertId: `j_${t.id}` })),
+    ...cookingTablesKitchen.filter(perteneceAlMozo).map((t) => ({ ...t, _alertId: `k_${t.id}` })),
+    ...cookingTablesJugo.filter(perteneceAlMozo).map((t) => ({ ...t, _alertId: `j_${t.id}` })),
   ];
 
   const initializedRef = useRef(false);
   const prevReadyRef = useRef(new Set());
   const prevCookingRef = useRef(new Set());
   const repeatRef = useRef(null);
+
+  // Clave estable: detecta cualquier cambio en el conjunto de IDs,
+  // no solo cambios de longitud (BUG #2 corregido)
+  const readyKey = allReady.map((t) => t._alertId).sort().join(',');
+  const cookingKey = allCooking.map((t) => t._alertId).sort().join(',');
 
   useEffect(() => {
     const currentReady = new Set(allReady.map((t) => t._alertId));
@@ -112,14 +128,26 @@ export const useWaiterDualAlerts = (
       return;
     }
 
+    // ¿Nueva mesa lista? → Sonido + vibración + notificación en bandeja (BUG #1 corregido)
     for (const id of currentReady) {
       if (!prevReadyRef.current.has(id)) {
+        const table = allReady.find((t) => t._alertId === id);
+        const num = table?.tableNumber || table?.id;
+        const area = table?._area || 'cocina';
+        const areaLabel = area === 'jugo' ? '🥤 Jugo' : '🍳 Cocina';
         playAlertSound();
         vibrateDevice();
+        // CRÍTICO: notificación en bandeja del sistema para cuando la pantalla está bloqueada
+        mostrarNotificacionLocal(
+          `${areaLabel} Lista · Mesa ${num}`,
+          '¡El pedido está listo para entregar! Toca para abrir.',
+          'waiter-alerts'
+        );
         break;
       }
     }
 
+    // ¿Nueva confirmación de cocina/jugo? → sonido suave al mozo
     for (const id of currentCooking) {
       if (!prevCookingRef.current.has(id)) {
         playSoftConfirmSound();
@@ -130,16 +158,29 @@ export const useWaiterDualAlerts = (
 
     prevReadyRef.current = currentReady;
     prevCookingRef.current = currentCooking;
-  }, [allReady.length, allCooking.length]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readyKey, cookingKey]);
 
   useEffect(() => {
     if (allReady.length > 0) {
       repeatRef.current = setInterval(() => {
         playAlertSound();
         vibrateDevice();
+        // Repetir también la notificación de bandeja cada 25s si no fue atendida
+        const firstReady = allReady[0];
+        if (firstReady) {
+          const num = firstReady.tableNumber || firstReady.id;
+          const areaLabel = firstReady._area === 'jugo' ? '🥤 Jugo' : '🍳 Cocina';
+          mostrarNotificacionLocal(
+            `${areaLabel} · Mesa ${num} — Sin atender`,
+            '¡El pedido sigue esperando! Por favor recógelo.',
+            'waiter-alerts'
+          );
+        }
       }, 25000);
     }
     return () => clearInterval(repeatRef.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allReady.length > 0]);
 };
 
