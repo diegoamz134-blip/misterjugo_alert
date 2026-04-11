@@ -75,7 +75,6 @@ export default async function handler(req, res) {
       console.error('Notify ready error:', error.message);
       return res.status(500).json({ error: error.message });
     }
-  }
   } else if (status === 'ordered') {
     // Notificación a COCINA o JUGOS: nuevo pedido del mozo
     const areaLabel = area === 'jugo' ? '🥤 Nuevo Jugo' : '🍳 Nuevo Pedido';
