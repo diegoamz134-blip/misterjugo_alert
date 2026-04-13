@@ -1,4 +1,4 @@
-import { Flame, GlassWater } from 'lucide-react';
+import { Flame, GlassWater, User } from 'lucide-react';
 
 // Colores por estado para cada área en la vista dividida (waiter)
 const SPLIT_COLORS = {
@@ -6,12 +6,14 @@ const SPLIT_COLORS = {
     idle: 'bg-slate-800',
     ordered: 'bg-blue-600',
     cooking: 'bg-amber-500',
+    pase: 'bg-yellow-500',
     ready: 'bg-orange-500',
   },
   jugo: {
     idle: 'bg-slate-800',
     ordered: 'bg-blue-500',
     cooking: 'bg-emerald-500',
+    pase: 'bg-lime-500',
     ready: 'bg-emerald-400',
   },
 };
@@ -21,7 +23,7 @@ const SPLIT_COLORS = {
  * Variantes: kitchen, waiter, jugo
  * En variante waiter con statusJugo muestra diseño dividido cuando ambas áreas activas.
  */
-export default function TableCard({ tableNumber, status, statusJugo, onClick, variant = 'kitchen' }) {
+export default function TableCard({ tableNumber, status, statusJugo, onClick, variant = 'kitchen', waiterName = '' }) {
   // ── Modo dividido (waiter con ambas áreas activas) ──────────────────────
   const cocStatus = status || 'idle';
   const jugStatus = statusJugo || 'idle';
@@ -34,7 +36,7 @@ export default function TableCard({ tableNumber, status, statusJugo, onClick, va
   if (showSplit) {
     const cocColor = SPLIT_COLORS.cocina[cocStatus] || 'bg-slate-800';
     const jugColor = SPLIT_COLORS.jugo[jugStatus] || 'bg-slate-800';
-    const hasPulse = cocStatus === 'ready' || jugStatus === 'ready' || cocStatus === 'ordered' || jugStatus === 'ordered';
+    const hasPulse = cocStatus === 'ready' || jugStatus === 'ready' || cocStatus === 'ordered' || jugStatus === 'ordered' || cocStatus === 'pase' || jugStatus === 'pase';
 
     return (
       <button
@@ -69,6 +71,15 @@ export default function TableCard({ tableNumber, status, statusJugo, onClick, va
             <GlassWater size={9} className="text-white/80" />
           </span>
         </div>
+        {/* Nombre del mesero */}
+        {waiterName && (
+          <div className="relative z-20 flex items-center gap-0.5 mt-0.5 px-1 max-w-full">
+            <User size={7} className="text-white/70 flex-shrink-0" />
+            <span className="text-[8px] text-white/80 font-semibold truncate leading-none" style={{ maxWidth: '90%' }}>
+              {waiterName}
+            </span>
+          </div>
+        )}
 
         {/* Dot pulsante si alguna está ready u ordered */}
         {hasPulse && (
@@ -90,6 +101,7 @@ export default function TableCard({ tableNumber, status, statusJugo, onClick, va
     idle:    'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-700 hover:border-slate-500',
     ordered: 'bg-blue-600 border-blue-400 text-white shadow-lg shadow-blue-500/40 alert-pulse',
     cooking: 'bg-amber-500 border-amber-400 text-white shadow-lg shadow-amber-400/30',
+    pase:    'bg-yellow-500 border-yellow-400 text-white shadow-lg shadow-yellow-400/30 alert-pulse',
     ready:   variant === 'jugo'
       ? 'bg-emerald-500 border-emerald-400 text-white shadow-lg shadow-emerald-500/40 alert-pulse'
       : 'bg-orange-500 border-orange-400 text-white shadow-lg shadow-orange-500/40 alert-pulse',
@@ -99,6 +111,7 @@ export default function TableCard({ tableNumber, status, statusJugo, onClick, va
     idle:    'Libre',
     ordered: variant === 'waiter' ? 'Enviado' : 'Nuevo',
     cooking: variant === 'jugo' ? 'Preparando' : 'En cocina',
+    pase:    variant === 'waiter' ? 'Pase' : 'En pase',
     ready:   'Listo',
   };
 
@@ -106,6 +119,7 @@ export default function TableCard({ tableNumber, status, statusJugo, onClick, va
     idle:    'text-slate-500',
     ordered: 'text-blue-100',
     cooking: 'text-amber-100',
+    pase:    'text-yellow-100',
     ready:   variant === 'jugo' ? 'text-emerald-100' : 'text-orange-100',
   };
 
@@ -136,8 +150,17 @@ export default function TableCard({ tableNumber, status, statusJugo, onClick, va
       <span className={`text-[10px] mt-1 font-semibold uppercase tracking-wider ${labelColors[finalStatus] || labelColors.idle}`}>
         {labels[finalStatus] || 'Libre'}
       </span>
+      {/* Nombre del mesero */}
+      {waiterName && finalStatus !== 'idle' && (
+        <div className="flex items-center gap-0.5 mt-0.5 px-1 max-w-full">
+          <User size={7} className="text-white/70 flex-shrink-0" />
+          <span className="text-[8px] text-white/80 font-semibold truncate leading-none" style={{ maxWidth: '90%' }}>
+            {waiterName}
+          </span>
+        </div>
+      )}
 
-      {(finalStatus === 'ready' || finalStatus === 'ordered') && (
+      {(finalStatus === 'ready' || finalStatus === 'ordered' || finalStatus === 'pase') && (
         <span className="absolute top-1.5 right-1.5 flex h-2.5 w-2.5">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
           <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white" />

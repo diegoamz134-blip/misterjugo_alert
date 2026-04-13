@@ -5,24 +5,47 @@ import { CheckCircle2, Utensils, GlassWater, User } from 'lucide-react';
  * area: 'cocina' (naranja) o 'jugo' (esmeralda)
  * waiterName: nombre del mozo que hizo el pedido (opcional)
  */
-export default function AlertCard({ tableNumber, onAcknowledge, area = 'cocina', waiterName }) {
+export default function AlertCard({ tableNumber, onAcknowledge, area = 'cocina', waiterName, isPase = false }) {
   const isJugo = area === 'jugo';
 
-  const gradientClass = isJugo
-    ? 'from-emerald-500 to-emerald-600 shadow-emerald-500/50 border-emerald-400/30'
-    : 'from-orange-500 to-orange-600 shadow-orange-500/50 border-orange-400/30';
+  let gradientClass, lightTextClass, medTextClass, dimTextClass, btnTextClass, btnHoverClass, shadowClass, badgeBg;
 
-  const lightTextClass = isJugo ? 'text-emerald-100' : 'text-orange-100';
-  const medTextClass   = isJugo ? 'text-emerald-200' : 'text-orange-200';
-  const dimTextClass   = isJugo ? 'text-emerald-200/80' : 'text-orange-200/80';
-  const btnTextClass   = isJugo ? 'text-emerald-600' : 'text-orange-600';
-  const btnHoverClass  = isJugo ? 'hover:bg-emerald-50' : 'hover:bg-orange-50';
-  const shadowClass    = isJugo ? 'shadow-emerald-900/20' : 'shadow-orange-900/20';
-  const badgeBg        = isJugo ? 'bg-emerald-400/20 border-emerald-300/30' : 'bg-orange-400/20 border-orange-300/30';
+  if (isPase) {
+    gradientClass  = isJugo ? 'from-lime-500 to-lime-600 shadow-lime-500/50 border-lime-400/30' : 'from-yellow-500 to-amber-600 shadow-yellow-500/50 border-yellow-400/30';
+    lightTextClass = isJugo ? 'text-lime-100' : 'text-yellow-100';
+    medTextClass   = isJugo ? 'text-lime-200' : 'text-yellow-200';
+    dimTextClass   = isJugo ? 'text-lime-200/80' : 'text-yellow-200/80';
+    btnTextClass   = isJugo ? 'text-lime-700' : 'text-yellow-700';
+    btnHoverClass  = isJugo ? 'hover:bg-lime-50' : 'hover:bg-yellow-50';
+    shadowClass    = isJugo ? 'shadow-lime-900/20' : 'shadow-yellow-900/20';
+    badgeBg        = isJugo ? 'bg-lime-400/20 border-lime-300/30' : 'bg-yellow-400/20 border-yellow-300/30';
+  } else if (isJugo) {
+    gradientClass  = 'from-emerald-500 to-emerald-600 shadow-emerald-500/50 border-emerald-400/30';
+    lightTextClass = 'text-emerald-100';
+    medTextClass   = 'text-emerald-200';
+    dimTextClass   = 'text-emerald-200/80';
+    btnTextClass   = 'text-emerald-600';
+    btnHoverClass  = 'hover:bg-emerald-50';
+    shadowClass    = 'shadow-emerald-900/20';
+    badgeBg        = 'bg-emerald-400/20 border-emerald-300/30';
+  } else {
+    gradientClass  = 'from-orange-500 to-orange-600 shadow-orange-500/50 border-orange-400/30';
+    lightTextClass = 'text-orange-100';
+    medTextClass   = 'text-orange-200';
+    dimTextClass   = 'text-orange-200/80';
+    btnTextClass   = 'text-orange-600';
+    btnHoverClass  = 'hover:bg-orange-50';
+    shadowClass    = 'shadow-orange-900/20';
+    badgeBg        = 'bg-orange-400/20 border-orange-300/30';
+  }
 
   const Icon = isJugo ? GlassWater : Utensils;
-  const label = isJugo ? 'Jugo Listo' : 'Pedido Listo';
-  const sublabel = isJugo ? 'El jugo está listo para entregar' : 'El pedido está listo para entregar';
+  const label = isPase
+    ? (isJugo ? 'Pase Jugo' : 'Pase Cocina')
+    : (isJugo ? 'Jugo Listo' : 'Pedido Listo');
+  const sublabel = isPase
+    ? 'Hay platos listos, pero falta más'
+    : (isJugo ? 'El jugo está listo para entregar' : 'El pedido está listo para entregar');
 
   return (
     <div className={`slide-up alert-pulse bg-gradient-to-br ${gradientClass} rounded-3xl p-6 text-white shadow-2xl border`}>
@@ -43,7 +66,7 @@ export default function AlertCard({ tableNumber, onAcknowledge, area = 'cocina',
         <div className="text-8xl font-black leading-none drop-shadow-lg">
           {tableNumber}
         </div>
-        <p className={`${lightTextClass} text-lg font-bold mt-2`}>Mesa {tableNumber} Lista</p>
+        <p className={`${lightTextClass} text-lg font-bold mt-2`}>{isPase ? `Mesa ${tableNumber} — Pase` : `Mesa ${tableNumber} Lista`}</p>
         <p className={`${dimTextClass} text-sm mt-1`}>{sublabel}</p>
       </div>
 
@@ -65,7 +88,7 @@ export default function AlertCard({ tableNumber, onAcknowledge, area = 'cocina',
                    flex items-center justify-center gap-2`}
       >
         <CheckCircle2 size={22} />
-        <span>Voy en Camino</span>
+        <span>{isPase ? 'Ya Recogí' : 'Voy en Camino'}</span>
       </button>
     </div>
   );
