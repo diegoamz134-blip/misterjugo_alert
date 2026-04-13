@@ -30,20 +30,48 @@ export const db = getFirestore(app);
 //  Cada mesa tiene: status_cocina y status_jugo (independientes)
 // ─────────────────────────────────────────────────────────────────
 
-/** Llama a la API de Vercel para enviar la notificación Push */
-const triggerNotification = async (tableNumber, status, area = '') => {
-  try {
-    // Evitar el error 404 en la consola durante desarrollo local
-    if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-      return; 
-    }
+// ─────────────────────────────────────────────────────────────────
+//  Estado de notificaciones push (visible en la UI)
+// ─────────────────────────────────────────────────────────────────
+let _pushOk = true;
+let _pushListeners = [];
 
-    fetch('/api/notify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tableNumber, status, area })
-    }).catch(() => {}); // Ocultar errores si falla
-  } catch (e) {}
+export const onPushStatusChange = (cb) => {
+  _pushListeners.push(cb);
+  return () => { _pushListeners = _pushListeners.filter((l) => l !== cb); };
+};
+
+export const getPushStatus = () => _pushOk;
+
+const _setPushStatus = (ok) => {
+  if (_pushOk === ok) return;
+  _pushOk = ok;
+  _pushListeners.forEach((cb) => cb(ok));
+};
+
+/** Llama a la API de Vercel para enviar la notificación Push */
+const triggerNotification = (tableNumber, status, area = '') => {
+  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    return;
+  }
+
+  fetch('/api/notify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tableNumber, status, area }),
+  })
+    .then((res) => {
+      if (res.ok) {
+        _setPushStatus(true);
+      } else {
+        console.warn(`[Push] Error ${res.status} al notificar mesa ${tableNumber}`);
+        _setPushStatus(false);
+      }
+    })
+    .catch((err) => {
+      console.warn('[Push] Sin conexión con /api/notify:', err.message);
+      _setPushStatus(false);
+    });
 };
 
 // ═══════════════════════════════════════════════════════════════

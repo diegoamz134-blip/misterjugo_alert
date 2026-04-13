@@ -7,6 +7,7 @@ import WaiterNameScreen from './components/WaiterNameScreen';
 import { useNativePush } from './hooks/useNativePush';
 import { useLocalNotifications } from './hooks/useLocalNotifications';
 import { initNativeAudio } from './services/audio';
+import { onPushStatusChange, getPushStatus } from './services/firebase';
 
 const STORAGE_KEY      = 'misterjugo_mode';
 const WAITER_NAME_KEY  = 'misterjugo_waiter_name';
@@ -14,6 +15,7 @@ const WAITER_NAME_KEY  = 'misterjugo_waiter_name';
 export default function App() {
   const [mode, setMode] = useState(() => localStorage.getItem(STORAGE_KEY));
   const [waiterName, setWaiterName] = useState(() => localStorage.getItem(WAITER_NAME_KEY));
+  const [pushOk, setPushOk] = useState(getPushStatus);
 
   // Registrar Token de Notificaciones Push Nativas.
   // Pasa el nombre del mozo para vincularlo al token → FCM personalizado por mozo
@@ -26,6 +28,10 @@ export default function App() {
   // que NO funciona cuando la pantalla está bloqueada.
   useEffect(() => {
     initNativeAudio();
+  }, []);
+
+  useEffect(() => {
+    return onPushStatusChange(setPushOk);
   }, []);
 
   const selectMode = (selectedMode) => {
@@ -48,14 +54,19 @@ export default function App() {
     setWaiterName(null);
   };
 
+  const pushBanner = !pushOk && mode && mode !== 'home' ? (
+    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-red-900/90 border border-red-500/50 text-red-200 text-xs font-semibold px-4 py-2 rounded-2xl shadow-lg backdrop-blur-sm">
+      Sin conexión con notificaciones push
+    </div>
+  ) : null;
+
   if (!mode) return <HomeView onSelect={selectMode} />;
-  if (mode === 'kitchen') return <KitchenView onChangeMode={changeMode} />;
-  if (mode === 'jugo')    return <JugoView onChangeMode={changeMode} />;
+  if (mode === 'kitchen') return <>{pushBanner}<KitchenView onChangeMode={changeMode} /></>;
+  if (mode === 'jugo')    return <>{pushBanner}<JugoView onChangeMode={changeMode} /></>;
 
   if (mode === 'waiter') {
-    // Si no hay nombre → pedir nombre primero
     if (!waiterName) return <WaiterNameScreen onConfirm={handleWaiterName} />;
-    return <WaiterView onChangeMode={changeMode} waiterName={waiterName} onChangeName={changeWaiterName} />;
+    return <>{pushBanner}<WaiterView onChangeMode={changeMode} waiterName={waiterName} onChangeName={changeWaiterName} /></>;
   }
 
   return <HomeView onSelect={selectMode} />;
