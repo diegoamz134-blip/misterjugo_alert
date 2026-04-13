@@ -71,6 +71,10 @@ export const useTables = () => {
   const cookingTablesJugo = sortByNumber(all.filter((t) => t.status_jugo === 'cooking'));
   const readyTablesJugo   = sortByNumber(all.filter((t) => t.status_jugo === 'ready'));
 
+  // ── Filtros PASE ──
+  const paseTablesKitchen = sortByNumber(all.filter((t) => t.status_cocina === 'pase'));
+  const paseTablesJugo    = sortByNumber(all.filter((t) => t.status_jugo === 'pase'));
+
   const isInitialized = all.length > 0;
 
   return {
@@ -90,6 +94,9 @@ export const useTables = () => {
     orderedTablesJugo,
     cookingTablesJugo,
     readyTablesJugo,
+    // Pase
+    paseTablesKitchen,
+    paseTablesJugo,
     isInitialized,
   };
 };

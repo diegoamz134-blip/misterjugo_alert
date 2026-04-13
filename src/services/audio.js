@@ -159,3 +159,38 @@ export const playSoftConfirmSound = async () => {
     osc.stop(ctx.currentTime + 0.4);
   } catch (e) {}
 };
+
+/**
+ * Alerta MEDIA para mozos — pase parcial de cocina/jugos.
+ * Más notable que el confirm suave, pero sin la urgencia del alert completo.
+ */
+export const playPaseSound = async () => {
+  if (Capacitor.isNativePlatform() && isNativeReady) {
+    NativeAudio.play({ assetId: 'alert' });
+    return;
+  }
+
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+
+    const playTone = (startTime, freq, duration = 0.15) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.35, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+      osc.start(startTime);
+      osc.stop(startTime + duration);
+    };
+
+    const t = ctx.currentTime;
+    playTone(t,       660);
+    playTone(t + 0.2, 880);
+    playTone(t + 0.4, 660);
+  } catch (e) {}
+};

@@ -7,6 +7,7 @@ import {
   onSnapshot,
   Timestamp,
   writeBatch,
+  increment,
 } from 'firebase/firestore';
 
 const firebaseConfig = {
@@ -64,6 +65,10 @@ export const markTableOrderedForArea = async (tableNumber, area, waiterName = ''
       cookingAt_jugo: null,
       readyAt_cocina: null,
       readyAt_jugo: null,
+      paseCount_cocina: 0,
+      paseCount_jugo: 0,
+      paseAt_cocina: null,
+      paseAt_jugo: null,
       waiterName: waiterName || '',
       // Legacy
       status: 'ordered',
@@ -76,6 +81,8 @@ export const markTableOrderedForArea = async (tableNumber, area, waiterName = ''
       orderedAt_cocina: now,
       cookingAt_cocina: null,
       readyAt_cocina: null,
+      paseCount_cocina: 0,
+      paseAt_cocina: null,
       waiterName: waiterName || '',
       // Legacy
       status: 'ordered',
@@ -88,6 +95,8 @@ export const markTableOrderedForArea = async (tableNumber, area, waiterName = ''
       orderedAt_jugo: now,
       cookingAt_jugo: null,
       readyAt_jugo: null,
+      paseCount_jugo: 0,
+      paseAt_jugo: null,
       waiterName: waiterName || '',
       // Legacy (solo si cocina está idle)
       status: 'ordered',
@@ -120,15 +129,41 @@ export const markReadyForArea = async (tableNumber, area) => {
   triggerNotification(tableNumber, 'ready', area);
 };
 
+/** COCINA/JUGO: Pase parcial — hay platos listos pero falta más */
+export const markPaseForArea = async (tableNumber, area) => {
+  const ref = doc(db, 'tables', String(tableNumber));
+  const field = area === 'jugo' ? 'status_jugo' : 'status_cocina';
+  const paseCountField = area === 'jugo' ? 'paseCount_jugo' : 'paseCount_cocina';
+  const paseAtField = area === 'jugo' ? 'paseAt_jugo' : 'paseAt_cocina';
+  await updateDoc(ref, {
+    [field]: 'pase',
+    [paseAtField]: Timestamp.now(),
+    [paseCountField]: increment(1),
+  });
+  triggerNotification(tableNumber, 'pase', area);
+};
+
+/** MOZO: Confirma que recogió el pase parcial → vuelve a cooking */
+export const acknowledgePaseForArea = async (tableNumber, area) => {
+  const ref = doc(db, 'tables', String(tableNumber));
+  const field = area === 'jugo' ? 'status_jugo' : 'status_cocina';
+  await updateDoc(ref, {
+    [field]: 'cooking',
+  });
+};
+
 /** MOZO: Confirma que recogió el pedido de un área → esa área vuelve a idle */
 export const acknowledgeForArea = async (tableNumber, area) => {
   const ref = doc(db, 'tables', String(tableNumber));
   const field = area === 'jugo' ? 'status_jugo' : 'status_cocina';
+  const areaKey = area === 'jugo' ? 'jugo' : 'cocina';
   await updateDoc(ref, {
     [field]: 'idle',
-    [`orderedAt_${area === 'jugo' ? 'jugo' : 'cocina'}`]: null,
-    [`cookingAt_${area === 'jugo' ? 'jugo' : 'cocina'}`]: null,
-    [`readyAt_${area === 'jugo' ? 'jugo' : 'cocina'}`]: null,
+    [`orderedAt_${areaKey}`]: null,
+    [`cookingAt_${areaKey}`]: null,
+    [`readyAt_${areaKey}`]: null,
+    [`paseCount_${areaKey}`]: 0,
+    [`paseAt_${areaKey}`]: null,
   });
 };
 
@@ -136,11 +171,14 @@ export const acknowledgeForArea = async (tableNumber, area) => {
 export const resetTableForArea = async (tableNumber, area) => {
   const ref = doc(db, 'tables', String(tableNumber));
   const field = area === 'jugo' ? 'status_jugo' : 'status_cocina';
+  const areaKey = area === 'jugo' ? 'jugo' : 'cocina';
   await updateDoc(ref, {
     [field]: 'idle',
-    [`orderedAt_${area === 'jugo' ? 'jugo' : 'cocina'}`]: null,
-    [`cookingAt_${area === 'jugo' ? 'jugo' : 'cocina'}`]: null,
-    [`readyAt_${area === 'jugo' ? 'jugo' : 'cocina'}`]: null,
+    [`orderedAt_${areaKey}`]: null,
+    [`cookingAt_${areaKey}`]: null,
+    [`readyAt_${areaKey}`]: null,
+    [`paseCount_${areaKey}`]: 0,
+    [`paseAt_${areaKey}`]: null,
   });
 };
 
@@ -227,6 +265,10 @@ export const initializeTables = async () => {
         cookingAt_jugo: null,
         readyAt_cocina: null,
         readyAt_jugo: null,
+        paseCount_cocina: 0,
+        paseCount_jugo: 0,
+        paseAt_cocina: null,
+        paseAt_jugo: null,
       },
       { merge: true }
     );

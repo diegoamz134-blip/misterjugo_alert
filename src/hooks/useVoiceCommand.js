@@ -1,5 +1,19 @@
 import { useRef, useState, useCallback } from 'react';
-import { confirmCookingForArea, markReadyForArea, resetTableForArea } from '../services/firebase';
+import { Capacitor } from '@capacitor/core';
+import { confirmCookingForArea, markReadyForArea, markPaseForArea, resetTableForArea } from '../services/firebase';
+
+// ── Plugin nativo (solo se carga si está disponible) ─────────────
+let SpeechRecognitionPlugin = null;
+const loadNativePlugin = async () => {
+  if (SpeechRecognitionPlugin) return SpeechRecognitionPlugin;
+  try {
+    const mod = await import('@capacitor-community/speech-recognition');
+    SpeechRecognitionPlugin = mod.SpeechRecognition;
+    return SpeechRecognitionPlugin;
+  } catch (e) {
+    return null;
+  }
+};
 
 // ── Diccionario de números en español ───────────────────────────
 const NUMBER_WORDS = {
@@ -24,7 +38,7 @@ const wordToNumber = (text) => {
 };
 
 const extractTableNumber = (text) => {
-  const mesaMatch = text.match(/mesa\s+([a-záéíóúüñ\d\s]+?)(?:\s+(?:list|recib|confirm|cancel|terminad|empez|preparand)|$)/i);
+  const mesaMatch = text.match(/mesa\s+([a-záéíóúüñ\d\s]+?)(?:\s+(?:list|recib|confirm|cancel|terminad|empez|preparand|pase)|$)/i);
   if (mesaMatch) {
     const raw = mesaMatch[1].trim();
     const num = wordToNumber(raw);
@@ -49,7 +63,6 @@ const speak = (text) => {
     if (!window.speechSynthesis) return;
     window.speechSynthesis.cancel();
     const utt = new SpeechSynthesisUtterance(text);
-    // Usar el idioma del sistema para síntesis (más confiable)
     utt.lang = navigator.language || 'es';
     utt.rate = 1.0;
     utt.volume = 1;
@@ -57,7 +70,7 @@ const speak = (text) => {
   } catch (e) {}
 };
 
-// Idiomas a intentar en orden (fallback chain)
+// Idiomas web fallback
 const LANG_FALLBACKS = ['es-ES', 'es-US', 'es', 'en-US'];
 
 // ── Hook principal ───────────────────────────────────────────────
@@ -66,12 +79,15 @@ export const useVoiceCommand = (area = 'cocina') => {
   const [feedback, setFeedback]     = useState(null);
   const recognitionRef              = useRef(null);
   const feedbackTimerRef            = useRef(null);
-  // Guardar referencias actuales en ref para evitar closures obsoletas
   const areaRef                     = useRef(area);
   areaRef.current = area;
 
-  const isSupported = typeof window !== 'undefined' &&
+  const isNative = Capacitor.isNativePlatform();
+  const hasWebSpeech = typeof window !== 'undefined' &&
     ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
+
+  // Siempre soportado en nativo (plugin), o si hay Web Speech API
+  const isSupported = isNative || hasWebSpeech;
 
   const showFeedback = useCallback((type, text) => {
     setFeedback({ type, text });
@@ -84,6 +100,7 @@ export const useVoiceCommand = (area = 'cocina') => {
   const parseAndExecute = useCallback(async (transcript) => {
     const text = transcript.toLowerCase();
     const isLista    = /list[ao]|terminad[ao]/.test(text);
+    const isPase     = /pase|parcial/.test(text);
     const isRecibida = /recibid[ao]|aceptad[ao]|confirm|preparand|empez/.test(text);
     const isCancelar = /cancel[ae]r?|quitar?|borrar?/.test(text);
     const forceJugo  = /jugo|jugos|bebida|vaso/.test(text);
@@ -97,7 +114,11 @@ export const useVoiceCommand = (area = 'cocina') => {
     }
 
     try {
-      if (isLista) {
+      if (isPase) {
+        await markPaseForArea(tableNumber, effectiveArea);
+        showFeedback('success', `🔔 Mesa ${tableNumber} — Pase parcial`);
+        speak(`Mesa ${tableNumber}, pase.`);
+      } else if (isLista) {
         await markReadyForArea(tableNumber, effectiveArea);
         showFeedback('success', `✅ Mesa ${tableNumber} marcada como lista`);
         speak(`Mesa ${tableNumber}, lista.`);
@@ -111,7 +132,7 @@ export const useVoiceCommand = (area = 'cocina') => {
         speak(`Mesa ${tableNumber}, cancelada.`);
       } else {
         showFeedback('error', `No entendí la acción. Escuché: "${transcript}"`);
-        speak('Di lista, recibida o cancelar.');
+        speak('Di lista, pase, recibida o cancelar.');
       }
     } catch (e) {
       showFeedback('error', 'Error al actualizar. Intenta de nuevo.');
@@ -119,8 +140,100 @@ export const useVoiceCommand = (area = 'cocina') => {
     }
   }, [showFeedback]);
 
-  // Función interna sin useCallback para evitar referencias circulares
-  const launchRecognition = useCallback((langIndex = 0) => {
+  // ═══════════════════════════════════════════════════════════════
+  // NATIVO: Usa @capacitor-community/speech-recognition
+  // ═══════════════════════════════════════════════════════════════
+  const startNative = useCallback(async () => {
+    try {
+      const SR = await loadNativePlugin();
+      if (!SR) {
+        showFeedback('error', 'Plugin de voz no disponible.');
+        return;
+      }
+
+      // Pedir permiso si no lo tiene
+      const { speechRecognition } = await SR.checkPermissions();
+      if (speechRecognition !== 'granted') {
+        const result = await SR.requestPermissions();
+        if (result.speechRecognition !== 'granted') {
+          showFeedback('error', 'Permiso de micrófono denegado. Actívalo en Ajustes.');
+          return;
+        }
+      }
+
+      setListening(true);
+      showFeedback('info', '🎤 Escuchando... habla ahora');
+
+      // Escuchar resultados parciales
+      const listener = await SR.addListener('partialResults', (data) => {
+        // data.matches es un array de transcripciones posibles
+        if (data.matches && data.matches.length > 0) {
+          const best = data.matches[0];
+          if (best && best.trim().length > 0) {
+            showFeedback('info', `🎤 "${best}"`);
+          }
+        }
+      });
+
+      await SR.start({
+        language: 'es-ES',
+        maxResults: 3,
+        popup: false,          // No mostrar el popup nativo de Google
+        partialResults: true,
+      });
+
+      // Esperar resultado final
+      // El plugin emite 'partialResults' y cuando termina, devuelve el resultado
+      // Usamos un listener de fin
+      const endListener = await SR.addListener('listeningState', async (state) => {
+        if (state.status === 'stopped') {
+          setListening(false);
+          listener.remove();
+          endListener.remove();
+        }
+      });
+
+      // Timeout: detener después de 8 segundos si no dice nada
+      setTimeout(async () => {
+        try {
+          const result = await SR.stop();
+          setListening(false);
+          listener.remove();
+          endListener.remove();
+
+          if (result && result.matches && result.matches.length > 0 && result.matches[0].trim()) {
+            parseAndExecute(result.matches[0]);
+          } else {
+            showFeedback('error', 'No se detectó voz. Toca e intenta de nuevo.');
+          }
+        } catch (e) {
+          setListening(false);
+        }
+      }, 8000);
+
+    } catch (e) {
+      setListening(false);
+      showFeedback('error', `Error de micrófono: ${e.message || 'desconocido'}`);
+    }
+  }, [showFeedback, parseAndExecute]);
+
+  const stopNative = useCallback(async () => {
+    try {
+      const SR = await loadNativePlugin();
+      if (SR) {
+        const result = await SR.stop();
+        if (result && result.matches && result.matches.length > 0 && result.matches[0].trim()) {
+          parseAndExecute(result.matches[0]);
+        }
+      }
+    } catch (e) {}
+    setListening(false);
+  }, [parseAndExecute]);
+
+  // ═══════════════════════════════════════════════════════════════
+  // WEB: Usa Web Speech API (solo Chrome)
+  // ═══════════════════════════════════════════════════════════════
+  const launchWebRecognition = useCallback((langIndex = 0) => {
     const lang = LANG_FALLBACKS[langIndex] || 'es';
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const recognition = new SpeechRecognition();
@@ -147,12 +260,11 @@ export const useVoiceCommand = (area = 'cocina') => {
       } else if (event.error === 'not-allowed' || event.error === 'permission-denied') {
         showFeedback('error', 'Permiso de micrófono denegado. Revísalo en el navegador.');
       } else if (event.error === 'network') {
-        // Intentar siguiente idioma del fallback
         const nextIndex = langIndex + 1;
         if (nextIndex < LANG_FALLBACKS.length) {
-          launchRecognition(nextIndex);
+          launchWebRecognition(nextIndex);
         } else {
-          showFeedback('error', 'No hay conexión al servicio de voz. Verifica internet y que uses Chrome.');
+          showFeedback('error', 'No hay conexión al servicio de voz. Verifica internet.');
         }
       } else if (event.error === 'audio-capture') {
         showFeedback('error', 'No se detectó micrófono en el dispositivo.');
@@ -162,8 +274,8 @@ export const useVoiceCommand = (area = 'cocina') => {
     };
 
     recognition.onend = () => setListening(false);
-
     recognitionRef.current = recognition;
+
     try {
       recognition.start();
     } catch (e) {
@@ -172,15 +284,26 @@ export const useVoiceCommand = (area = 'cocina') => {
     }
   }, [showFeedback, parseAndExecute]);
 
+  // ═══════════════════════════════════════════════════════════════
+  // API pública
+  // ═══════════════════════════════════════════════════════════════
   const startListening = useCallback(() => {
     if (!isSupported || listening) return;
-    launchRecognition(0);
-  }, [isSupported, listening, launchRecognition]);
+    if (isNative) {
+      startNative();
+    } else {
+      launchWebRecognition(0);
+    }
+  }, [isSupported, listening, isNative, startNative, launchWebRecognition]);
 
   const stopListening = useCallback(() => {
-    try { recognitionRef.current?.stop(); } catch (e) {}
-    setListening(false);
-  }, []);
+    if (isNative) {
+      stopNative();
+    } else {
+      try { recognitionRef.current?.stop(); } catch (e) {}
+      setListening(false);
+    }
+  }, [isNative, stopNative]);
 
   return { listening, feedback, isSupported, startListening, stopListening };
 };

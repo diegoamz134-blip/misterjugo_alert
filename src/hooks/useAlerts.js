@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { playAlertSound, vibrateDevice, playKitchenOrderSound, playSoftConfirmSound } from '../services/audio';
+import { playAlertSound, vibrateDevice, playKitchenOrderSound, playSoftConfirmSound, playPaseSound } from '../services/audio';
 import { mostrarNotificacionLocal } from './useLocalNotifications';
 
 const speakAcknowledge = (tableNumber, waiterName, area) => {
@@ -85,16 +85,12 @@ export const useWaiterAlerts = (readyTables, cookingTables) => {
 export const useWaiterDualAlerts = (
   readyTablesKitchen, cookingTablesKitchen,
   readyTablesJugo, cookingTablesJugo,
-  waiterName = null   // Nombre del mozo actual. Solo alerta sus propias mesas.
+  waiterName = null,
+  paseTablesKitchen = [], paseTablesJugo = []
 ) => {
-  // Combinar listas con prefijo para que los IDs no colisionen
-  // Filtrar por waiterName: solo mesas que le pertenecen a este mozo
   const perteneceAlMozo = (t) => {
-    // Si no hay nombre de mozo configurado, mostrar todo (fallback)
     if (!waiterName) return true;
-    // Si la mesa no tiene waiterName aun, mostrar (pedido legacy o sin asignar)
     if (!t.waiterName) return true;
-    // Solo mostrar si coincide con el mozo actual
     return t.waiterName === waiterName;
   };
 
@@ -106,29 +102,35 @@ export const useWaiterDualAlerts = (
     ...cookingTablesKitchen.filter(perteneceAlMozo).map((t) => ({ ...t, _alertId: `k_${t.id}` })),
     ...cookingTablesJugo.filter(perteneceAlMozo).map((t) => ({ ...t, _alertId: `j_${t.id}` })),
   ];
+  const allPase = [
+    ...paseTablesKitchen.filter(perteneceAlMozo).map((t) => ({ ...t, _alertId: `pk_${t.id}`, _area: 'cocina' })),
+    ...paseTablesJugo.filter(perteneceAlMozo).map((t) => ({ ...t, _alertId: `pj_${t.id}`, _area: 'jugo' })),
+  ];
 
   const initializedRef = useRef(false);
   const prevReadyRef = useRef(new Set());
   const prevCookingRef = useRef(new Set());
+  const prevPaseRef = useRef(new Set());
   const repeatRef = useRef(null);
 
-  // Clave estable: detecta cualquier cambio en el conjunto de IDs,
-  // no solo cambios de longitud (BUG #2 corregido)
   const readyKey = allReady.map((t) => t._alertId).sort().join(',');
   const cookingKey = allCooking.map((t) => t._alertId).sort().join(',');
+  const paseKey = allPase.map((t) => t._alertId).sort().join(',');
 
   useEffect(() => {
     const currentReady = new Set(allReady.map((t) => t._alertId));
     const currentCooking = new Set(allCooking.map((t) => t._alertId));
+    const currentPase = new Set(allPase.map((t) => t._alertId));
 
     if (!initializedRef.current) {
       initializedRef.current = true;
       prevReadyRef.current = currentReady;
       prevCookingRef.current = currentCooking;
+      prevPaseRef.current = currentPase;
       return;
     }
 
-    // ¿Nueva mesa lista? → Sonido + vibración + notificación en bandeja (BUG #1 corregido)
+    // ¿Nueva mesa lista? → Sonido FUERTE + vibración + notificación
     for (const id of currentReady) {
       if (!prevReadyRef.current.has(id)) {
         const table = allReady.find((t) => t._alertId === id);
@@ -137,10 +139,27 @@ export const useWaiterDualAlerts = (
         const areaLabel = area === 'jugo' ? '🥤 Jugo' : '🍳 Cocina';
         playAlertSound();
         vibrateDevice();
-        // CRÍTICO: notificación en bandeja del sistema para cuando la pantalla está bloqueada
         mostrarNotificacionLocal(
           `${areaLabel} Lista · Mesa ${num}`,
-          '¡El pedido está listo para entregar! Toca para abrir.',
+          '¡Todo listo! Último viaje. Toca para abrir.',
+          'waiter-alerts'
+        );
+        break;
+      }
+    }
+
+    // ¿Nuevo pase parcial? → Sonido MEDIO + vibración media + notificación
+    for (const id of currentPase) {
+      if (!prevPaseRef.current.has(id)) {
+        const table = allPase.find((t) => t._alertId === id);
+        const num = table?.tableNumber || table?.id;
+        const area = table?._area || 'cocina';
+        const areaLabel = area === 'jugo' ? '🥤 Jugo' : '🍳 Cocina';
+        playPaseSound();
+        if ('vibrate' in navigator) navigator.vibrate([300, 100, 300]);
+        mostrarNotificacionLocal(
+          `${areaLabel} Pase · Mesa ${num}`,
+          'Hay platos listos pero falta más. ¡Ve a recoger!',
           'waiter-alerts'
         );
         break;
@@ -158,30 +177,45 @@ export const useWaiterDualAlerts = (
 
     prevReadyRef.current = currentReady;
     prevCookingRef.current = currentCooking;
+    prevPaseRef.current = currentPase;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [readyKey, cookingKey]);
+  }, [readyKey, cookingKey, paseKey]);
 
   useEffect(() => {
-    if (allReady.length > 0) {
+    if (allReady.length > 0 || allPase.length > 0) {
       repeatRef.current = setInterval(() => {
-        playAlertSound();
-        vibrateDevice();
-        // Repetir también la notificación de bandeja cada 25s si no fue atendida
-        const firstReady = allReady[0];
-        if (firstReady) {
-          const num = firstReady.tableNumber || firstReady.id;
-          const areaLabel = firstReady._area === 'jugo' ? '🥤 Jugo' : '🍳 Cocina';
-          mostrarNotificacionLocal(
-            `${areaLabel} · Mesa ${num} — Sin atender`,
-            '¡El pedido sigue esperando! Por favor recógelo.',
-            'waiter-alerts'
-          );
+        if (allReady.length > 0) {
+          playAlertSound();
+          vibrateDevice();
+          const firstReady = allReady[0];
+          if (firstReady) {
+            const num = firstReady.tableNumber || firstReady.id;
+            const areaLabel = firstReady._area === 'jugo' ? '🥤 Jugo' : '🍳 Cocina';
+            mostrarNotificacionLocal(
+              `${areaLabel} · Mesa ${num} — Sin atender`,
+              '¡El pedido sigue esperando! Por favor recógelo.',
+              'waiter-alerts'
+            );
+          }
+        } else if (allPase.length > 0) {
+          playPaseSound();
+          if ('vibrate' in navigator) navigator.vibrate([300, 100, 300]);
+          const firstPase = allPase[0];
+          if (firstPase) {
+            const num = firstPase.tableNumber || firstPase.id;
+            const areaLabel = firstPase._area === 'jugo' ? '🥤 Jugo' : '🍳 Cocina';
+            mostrarNotificacionLocal(
+              `${areaLabel} Pase · Mesa ${num} — Sin recoger`,
+              'Hay platos listos esperando. ¡Ve a recoger!',
+              'waiter-alerts'
+            );
+          }
         }
-      }, 25000);
+      }, 10000);
     }
     return () => clearInterval(repeatRef.current);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allReady.length > 0]);
+  }, [allReady.length > 0 || allPase.length > 0]);
 };
 
 /**
@@ -192,6 +226,7 @@ export const useWaiterDualAlerts = (
 export const useKitchenAlerts = (orderedTables, readyTables) => {
   const initOrderedRef = useRef(false);
   const prevOrderedRef = useRef(new Set());
+  const repeatOrderedRef = useRef(null);
   
   const initReadyRef = useRef(false);
   const prevReadyRef = useRef(new Map());
@@ -208,10 +243,11 @@ export const useKitchenAlerts = (orderedTables, readyTables) => {
       if (!prevOrderedRef.current.has(id)) {
         const table = orderedTables.find((t) => t.id === id);
         const num = table?.tableNumber || id;
-        playKitchenOrderSound(); // sonido fuerte para cocina ruidosa
+        playKitchenOrderSound();
+        vibrateDevice();
         mostrarNotificacionLocal(
           `🍳 Nuevo Pedido · Mesa ${num}`,
-          'El mozo registró un pedido nuevo.',
+          'El mozo registró un pedido nuevo. ¡Confirma!',
           'kitchen-alerts'
         );
         break;
@@ -220,7 +256,27 @@ export const useKitchenAlerts = (orderedTables, readyTables) => {
     prevOrderedRef.current = currentOrdered;
   }, [orderedTables]);
 
-  // 2. Voz cuando el mozo recoge la comida
+  // 2. Repetir alerta cada 10s mientras haya pedidos sin confirmar
+  useEffect(() => {
+    if (orderedTables.length > 0) {
+      repeatOrderedRef.current = setInterval(() => {
+        playKitchenOrderSound();
+        vibrateDevice();
+        const first = orderedTables[0];
+        if (first) {
+          const num = first.tableNumber || parseInt(first.id);
+          mostrarNotificacionLocal(
+            `🍳 Mesa ${num} — Pedido sin confirmar`,
+            `${orderedTables.length} pedido(s) esperando. ¡Toca para confirmar!`,
+            'kitchen-alerts'
+          );
+        }
+      }, 10000);
+    }
+    return () => clearInterval(repeatOrderedRef.current);
+  }, [orderedTables.length > 0]);
+
+  // 3. Voz cuando el mozo recoge la comida
   useEffect(() => {
     const currentReady = new Map(readyTables.map((t) => [t.id, t]));
     if (!initReadyRef.current) {
@@ -245,6 +301,7 @@ export const useKitchenAlerts = (orderedTables, readyTables) => {
 export const useJugoAlerts = (orderedTablesJugo, readyTablesJugo) => {
   const initOrderedRef = useRef(false);
   const prevOrderedRef = useRef(new Set());
+  const repeatOrderedRef = useRef(null);
   
   const initReadyRef = useRef(false);
   const prevReadyRef = useRef(new Map());
@@ -261,9 +318,10 @@ export const useJugoAlerts = (orderedTablesJugo, readyTablesJugo) => {
         const table = orderedTablesJugo.find((t) => t.id === id);
         const num = table?.tableNumber || id;
         playKitchenOrderSound();
+        vibrateDevice();
         mostrarNotificacionLocal(
           `🥤 Nuevo Jugo · Mesa ${num}`,
-          'El mozo registró un pedido nuevo.',
+          'El mozo registró un pedido de jugo. ¡Confirma!',
           'kitchen-alerts'
         );
         break;
@@ -271,6 +329,26 @@ export const useJugoAlerts = (orderedTablesJugo, readyTablesJugo) => {
     }
     prevOrderedRef.current = currentOrdered;
   }, [orderedTablesJugo]);
+
+  // Repetir alerta cada 10s mientras haya jugos sin confirmar
+  useEffect(() => {
+    if (orderedTablesJugo.length > 0) {
+      repeatOrderedRef.current = setInterval(() => {
+        playKitchenOrderSound();
+        vibrateDevice();
+        const first = orderedTablesJugo[0];
+        if (first) {
+          const num = first.tableNumber || parseInt(first.id);
+          mostrarNotificacionLocal(
+            `🥤 Mesa ${num} — Jugo sin confirmar`,
+            `${orderedTablesJugo.length} jugo(s) esperando. ¡Toca para confirmar!`,
+            'kitchen-alerts'
+          );
+        }
+      }, 10000);
+    }
+    return () => clearInterval(repeatOrderedRef.current);
+  }, [orderedTablesJugo.length > 0]);
 
   useEffect(() => {
     const currentReady = new Map(readyTablesJugo.map((t) => [t.id, t]));
