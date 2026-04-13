@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Bell, Flame, Zap, Clock, Home, Building2, Landmark, GlassWater, ChefHat, X, User } from 'lucide-react';
 import { useTables, FLOORS } from '../hooks/useTables';
 import { useWaiterDualAlerts } from '../hooks/useAlerts';
-import { markTableOrderedForArea, acknowledgeForArea, resetTableForArea } from '../services/firebase';
+import { markTableOrderedForArea, acknowledgeForArea, acknowledgePaseForArea, resetTableForArea } from '../services/firebase';
 import AlertCard from '../components/AlertCard';
 import TableCard from '../components/TableCard';
 import logo from '../assets/misterjugo.jpg';
@@ -16,12 +16,34 @@ const FloorIcon = ({ floor, size = 14 }) => {
 export default function WaiterView({ onChangeMode, waiterName, onChangeName }) {
   const {
     loading, getTable,
-    orderedTablesKitchen, cookingTablesKitchen, readyTablesKitchen,
-    orderedTablesJugo, cookingTablesJugo, readyTablesJugo,
+    orderedTablesKitchen: _orderedTablesKitchen,
+    cookingTablesKitchen: _cookingTablesKitchen,
+    readyTablesKitchen: _readyTablesKitchen,
+    orderedTablesJugo: _orderedTablesJugo,
+    cookingTablesJugo: _cookingTablesJugo,
+    readyTablesJugo: _readyTablesJugo,
+    paseTablesKitchen: _paseTablesKitchen,
+    paseTablesJugo: _paseTablesJugo,
     isInitialized
   } = useTables();
 
-  useWaiterDualAlerts(readyTablesKitchen, cookingTablesKitchen, readyTablesJugo, cookingTablesJugo, waiterName);
+  // ── Filtrar por mesero: solo mostrar las mesas propias ──
+  const esMiMesa = (t) => {
+    if (!waiterName) return true;       // sin nombre configurado → mostrar todo
+    if (!t.waiterName) return true;     // mesa sin asignar → mostrar (fallback)
+    return t.waiterName === waiterName;
+  };
+
+  const readyTablesKitchen   = _readyTablesKitchen.filter(esMiMesa);
+  const cookingTablesKitchen = _cookingTablesKitchen.filter(esMiMesa);
+  const orderedTablesKitchen = _orderedTablesKitchen.filter(esMiMesa);
+  const readyTablesJugo      = _readyTablesJugo.filter(esMiMesa);
+  const cookingTablesJugo    = _cookingTablesJugo.filter(esMiMesa);
+  const orderedTablesJugo    = _orderedTablesJugo.filter(esMiMesa);
+  const paseTablesKitchen    = _paseTablesKitchen.filter(esMiMesa);
+  const paseTablesJugo       = _paseTablesJugo.filter(esMiMesa);
+
+  useWaiterDualAlerts(readyTablesKitchen, cookingTablesKitchen, readyTablesJugo, cookingTablesJugo, waiterName, paseTablesKitchen, paseTablesJugo);
 
   const [selectedTable, setSelectedTable] = useState(null);
 
@@ -30,10 +52,17 @@ export default function WaiterView({ onChangeMode, waiterName, onChangeName }) {
     const cocinaIdle = table.status_cocina === 'idle';
     const jugoIdle = table.status_jugo === 'idle';
 
+    // Bloquear si la mesa pertenece a otro mesero y no está libre
+    const otroMesero = table.waiterName && waiterName && table.waiterName !== waiterName;
+    const mesaOcupada = !cocinaIdle || !jugoIdle;
+    if (otroMesero && mesaOcupada) return; // No permitir tocar mesa de otro
+
     if (cocinaIdle && jugoIdle) { setSelectedTable(tableNumber); return; }
     if (!cocinaIdle && !jugoIdle && table.status_cocina === 'ordered') { setSelectedTable(tableNumber); return; }
     if (cocinaIdle && !jugoIdle) { setSelectedTable(tableNumber); return; }
     if (!cocinaIdle && jugoIdle) { setSelectedTable(tableNumber); return; }
+    if (table.status_cocina === 'pase') { acknowledgePaseForArea(tableNumber, 'cocina'); return; }
+    if (table.status_jugo === 'pase') { acknowledgePaseForArea(tableNumber, 'jugo'); return; }
     if (table.status_cocina === 'ready') { acknowledgeForArea(tableNumber, 'cocina'); return; }
     if (table.status_jugo === 'ready') { acknowledgeForArea(tableNumber, 'jugo'); return; }
     if (table.status_cocina === 'ordered') { resetTableForArea(tableNumber, 'cocina'); return; }
@@ -59,6 +88,9 @@ export default function WaiterView({ onChangeMode, waiterName, onChangeName }) {
   const hasReadyKitchen = readyTablesKitchen.length > 0;
   const hasReadyJugo    = readyTablesJugo.length > 0;
   const hasReadyAlerts  = hasReadyKitchen || hasReadyJugo;
+  const hasPaseKitchen  = paseTablesKitchen.length > 0;
+  const hasPaseJugo     = paseTablesJugo.length > 0;
+  const hasPaseAlerts   = hasPaseKitchen || hasPaseJugo;
   const hasCookingKitchen = cookingTablesKitchen.length > 0;
   const hasCookingJugo    = cookingTablesJugo.length > 0;
   const hasOrderedKitchen = orderedTablesKitchen.length > 0;
@@ -67,7 +99,7 @@ export default function WaiterView({ onChangeMode, waiterName, onChangeName }) {
   const hasOrderedInfo    = hasOrderedKitchen || hasOrderedJugo;
 
   return (
-    <div className={`min-h-screen transition-colors duration-700 ${hasReadyAlerts ? 'bg-[#1c0800]' : 'bg-[#080d1a]'}`}>
+    <div className={`min-h-screen transition-colors duration-700 ${hasReadyAlerts ? 'bg-[#1c0800]' : hasPaseAlerts ? 'bg-[#1a1500]' : 'bg-[#080d1a]'}`}>
 
       {/* ── Header ── */}
       <header className="flex items-center justify-between px-4 pt-4 pb-2">
@@ -81,9 +113,9 @@ export default function WaiterView({ onChangeMode, waiterName, onChangeName }) {
             <span className="text-white font-bold text-sm">{waiterName}</span>
           </button>
           <div className="flex items-center gap-1.5 ml-1">
-            <div className={`w-2 h-2 rounded-full ${hasReadyAlerts ? 'bg-orange-500 animate-pulse' : 'bg-green-500'}`} />
-            <span className={`text-xs font-bold ${hasReadyAlerts ? 'text-orange-400' : 'text-green-400'}`}>
-              {hasReadyAlerts ? 'Alerta activa' : 'En línea'}
+            <div className={`w-2 h-2 rounded-full ${hasReadyAlerts ? 'bg-orange-500 animate-pulse' : hasPaseAlerts ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'}`} />
+            <span className={`text-xs font-bold ${hasReadyAlerts ? 'text-orange-400' : hasPaseAlerts ? 'text-yellow-400' : 'text-green-400'}`}>
+              {hasReadyAlerts ? 'Alerta activa' : hasPaseAlerts ? 'Pase pendiente' : 'En línea'}
             </span>
           </div>
         </div>
@@ -149,6 +181,62 @@ export default function WaiterView({ onChangeMode, waiterName, onChangeName }) {
                       area="jugo"
                       waiterName={t.waiterName}
                       onAcknowledge={() => acknowledgeForArea(num, 'jugo')} />
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ══ Pase parcial COCINA ══ */}
+          {hasPaseKitchen && (
+            <div>
+              <div className="text-center py-4">
+                <p className="text-yellow-400 text-xs font-bold uppercase tracking-widest mb-1 flex items-center justify-center gap-1">
+                  <Bell size={12} /> Pase Cocina
+                </p>
+                <h2 className="text-white font-extrabold text-2xl">
+                  {paseTablesKitchen.length === 1 ? '¡Pase parcial!' : `${paseTablesKitchen.length} pases parciales`}
+                </h2>
+              </div>
+              <div className="max-w-sm mx-auto space-y-4">
+                {paseTablesKitchen.map((table) => {
+                  const num = table.tableNumber || parseInt(table.id);
+                  const t = getTable(num);
+                  return (
+                    <AlertCard key={`pk_${table.id}`}
+                      tableNumber={num}
+                      area="cocina"
+                      isPase
+                      waiterName={t.waiterName}
+                      onAcknowledge={() => acknowledgePaseForArea(num, 'cocina')} />
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ══ Pase parcial JUGO ══ */}
+          {hasPaseJugo && (
+            <div>
+              <div className="text-center py-4">
+                <p className="text-lime-400 text-xs font-bold uppercase tracking-widest mb-1 flex items-center justify-center gap-1">
+                  <GlassWater size={12} /> Pase Jugos
+                </p>
+                <h2 className="text-white font-extrabold text-2xl">
+                  {paseTablesJugo.length === 1 ? '¡Pase parcial!' : `${paseTablesJugo.length} pases parciales`}
+                </h2>
+              </div>
+              <div className="max-w-sm mx-auto space-y-4">
+                {paseTablesJugo.map((table) => {
+                  const num = table.tableNumber || parseInt(table.id);
+                  const t = getTable(num);
+                  return (
+                    <AlertCard key={`pj_${table.id}`}
+                      tableNumber={num}
+                      area="jugo"
+                      isPase
+                      waiterName={t.waiterName}
+                      onAcknowledge={() => acknowledgePaseForArea(num, 'jugo')} />
                   );
                 })}
               </div>
@@ -239,15 +327,23 @@ export default function WaiterView({ onChangeMode, waiterName, onChangeName }) {
                   }`}>
                     {floor.tables.map((num) => {
                       const t = getTable(num);
+                      const esDeOtro = t.waiterName && waiterName && t.waiterName !== waiterName;
+                      const mesaOcupada = t.status_cocina !== 'idle' || t.status_jugo !== 'idle';
+                      const bloqueado = esDeOtro && mesaOcupada;
                       return (
-                        <TableCard
-                          key={num}
-                          tableNumber={num}
-                          status={t.status_cocina || 'idle'}
-                          statusJugo={t.status_jugo || 'idle'}
-                          onClick={() => handleTableClick(num)}
-                          variant="waiter"
-                        />
+                        <div key={num} className={`relative ${bloqueado ? 'opacity-50' : ''}`} title={bloqueado ? `Mesa de ${t.waiterName}` : ''}>
+                          <TableCard
+                            tableNumber={num}
+                            status={t.status_cocina || 'idle'}
+                            statusJugo={t.status_jugo || 'idle'}
+                            onClick={() => handleTableClick(num)}
+                            variant="waiter"
+                            waiterName={t.waiterName || ''}
+                          />
+                          {bloqueado && (
+                            <div className="absolute inset-0 rounded-2xl cursor-not-allowed" />
+                          )}
+                        </div>
                       );
                     })}
                   </div>
@@ -263,6 +359,7 @@ export default function WaiterView({ onChangeMode, waiterName, onChangeName }) {
               <div className="flex items-center gap-2 text-xs text-slate-400"><div className="w-3 h-3 rounded-md bg-slate-700 border border-slate-600 flex-shrink-0" /><span>Libre → toca para registrar pedido</span></div>
               <div className="flex items-center gap-2 text-xs text-slate-400"><div className="w-3 h-3 rounded-md bg-blue-600 flex-shrink-0" /><span>Enviado → esperando confirmación</span></div>
               <div className="flex items-center gap-2 text-xs text-slate-400"><div className="w-3 h-3 rounded-md bg-amber-500 flex-shrink-0" /><span>En preparación → cocina/jugos trabajando</span></div>
+              <div className="flex items-center gap-2 text-xs text-slate-400"><div className="w-3 h-3 rounded-md bg-yellow-500 flex-shrink-0" /><span>Pase → hay platos listos, falta más</span></div>
               <div className="flex items-center gap-2 text-xs text-slate-400">
                 <div className="w-3 h-3 rounded-md overflow-hidden flex-shrink-0 flex">
                   <div className="w-1/2 bg-amber-500" /><div className="w-1/2 bg-emerald-500" />
@@ -273,7 +370,7 @@ export default function WaiterView({ onChangeMode, waiterName, onChangeName }) {
           </div>
 
           {/* ══ Standby ══ */}
-          {!hasReadyAlerts && !hasCookingInfo && !hasOrderedInfo && isInitialized && (
+          {!hasReadyAlerts && !hasPaseAlerts && !hasCookingInfo && !hasOrderedInfo && isInitialized && (
             <div className="flex flex-col items-center py-6 text-center">
               <div className="relative mb-5">
                 <div className="absolute inset-0 w-24 h-24 rounded-full border border-slate-700/40 animate-ping" style={{ animationDuration: '3s' }} />

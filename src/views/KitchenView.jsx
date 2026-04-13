@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Zap, Flame, LayoutGrid, Home, Building2, Landmark, Settings } from 'lucide-react';
+import { Zap, Flame, LayoutGrid, Home, Building2, Landmark, Settings, Bell, CheckCircle2, X } from 'lucide-react';
 import { useTables, FLOORS } from '../hooks/useTables';
-import { confirmCookingForArea, markReadyForArea, resetTableForArea, initializeTables } from '../services/firebase';
+import { confirmCookingForArea, markReadyForArea, markPaseForArea, resetTableForArea, initializeTables } from '../services/firebase';
 import { useKitchenAlerts } from '../hooks/useAlerts';
 import { useWakeLock } from '../hooks/useWakeLock';
 import TableCard from '../components/TableCard';
@@ -18,6 +18,7 @@ export default function KitchenView({ onChangeMode }) {
   const { loading, getTable, orderedTablesKitchen, cookingTablesKitchen, readyTablesKitchen, isInitialized } = useTables();
   const [initializing, setInitializing] = useState(false);
   const [activeFloor, setActiveFloor] = useState(null);
+  const [cookingModalTable, setCookingModalTable] = useState(null);
 
   useWakeLock();
   useKitchenAlerts(orderedTablesKitchen, readyTablesKitchen);
@@ -26,7 +27,8 @@ export default function KitchenView({ onChangeMode }) {
     const table = getTable(tableNumber);
     switch (table.status_cocina) {
       case 'ordered': confirmCookingForArea(tableNumber, 'cocina'); break;
-      case 'cooking': markReadyForArea(tableNumber, 'cocina'); break;
+      case 'cooking': setCookingModalTable(tableNumber); break;
+      case 'pase':    markReadyForArea(tableNumber, 'cocina'); break;
       case 'ready':   resetTableForArea(tableNumber, 'cocina'); break;
       default: break;
     }
@@ -145,7 +147,7 @@ export default function KitchenView({ onChangeMode }) {
                     : 'grid-cols-5 sm:grid-cols-7'
                   }`}>
                     {floor.tables.map((num) => (
-                      <TableCard key={num} tableNumber={num} status={getTable(num).status_cocina || 'idle'} onClick={() => handleTableClick(num)} variant="kitchen" />
+                      <TableCard key={num} tableNumber={num} status={getTable(num).status_cocina || 'idle'} onClick={() => handleTableClick(num)} variant="kitchen" waiterName={getTable(num).waiterName || ''} />
                     ))}
                   </div>
                 </section>
@@ -160,13 +162,49 @@ export default function KitchenView({ onChangeMode }) {
         <div className="flex flex-wrap items-center justify-center gap-4 pb-6 px-4 text-xs text-slate-600">
           <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-md bg-slate-700 border border-slate-600" /><span>Libre</span></div>
           <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-md bg-blue-600" /><span>Nuevo · confirmar</span></div>
-          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-md bg-amber-500" /><span>Cocinando · marcar listo</span></div>
+          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-md bg-amber-500" /><span>Cocinando</span></div>
+          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-md bg-yellow-500" /><span>Pase · esperando mozo</span></div>
           <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-md bg-orange-500" /><span>Listo · cancelar</span></div>
         </div>
       )}
 
       {/* ── Botón flotante de voz ── */}
       <VoiceFAB area="cocina" />
+
+      {/* ══ MODAL: Pase o Último ══ */}
+      {cookingModalTable && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6" onClick={() => setCookingModalTable(null)}>
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+          <div className="relative w-full max-w-xs slide-up" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 shadow-2xl">
+              <button onClick={() => setCookingModalTable(null)} className="absolute top-4 right-4 text-slate-500 hover:text-slate-300 transition-colors">
+                <X size={20} />
+              </button>
+              <div className="text-center mb-6">
+                <div className="text-4xl font-black text-white mb-1">{cookingModalTable}</div>
+                <p className="text-slate-400 text-sm">Mesa {cookingModalTable}</p>
+                <p className="text-slate-500 text-xs mt-1">¿Ya está todo o solo una parte?</p>
+              </div>
+              <div className="space-y-3">
+                <button onClick={() => { markPaseForArea(cookingModalTable, 'cocina'); setCookingModalTable(null); }}
+                  className="w-full p-4 bg-yellow-500/15 hover:bg-yellow-500/25 border border-yellow-500/30 hover:border-yellow-500/50 rounded-2xl transition-all active:scale-95 flex items-center gap-3">
+                  <div className="w-10 h-10 bg-yellow-500/20 rounded-xl flex items-center justify-center">
+                    <Bell size={22} className="text-yellow-400" />
+                  </div>
+                  <div className="text-left"><p className="text-white font-bold text-sm">🔔 Pase</p><p className="text-slate-400 text-xs">Hay platos listos, falta más</p></div>
+                </button>
+                <button onClick={() => { markReadyForArea(cookingModalTable, 'cocina'); setCookingModalTable(null); }}
+                  className="w-full p-4 bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/30 hover:border-orange-500/50 rounded-2xl transition-all active:scale-95 flex items-center gap-3">
+                  <div className="w-10 h-10 bg-orange-500/20 rounded-xl flex items-center justify-center">
+                    <CheckCircle2 size={22} className="text-orange-400" />
+                  </div>
+                  <div className="text-left"><p className="text-white font-bold text-sm">✅ Último</p><p className="text-slate-400 text-xs">Todo listo, último viaje</p></div>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
