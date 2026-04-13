@@ -182,66 +182,6 @@ export const resetTableForArea = async (tableNumber, area) => {
   });
 };
 
-// ═══════════════════════════════════════════════════════════════
-//  FUNCIONES LEGACY (mantienen compatibilidad)
-// ═══════════════════════════════════════════════════════════════
-
-/** MOZO: Mesa tiene pedido (acaba de tomar la comanda) */
-export const markTableOrdered = async (tableNumber) => {
-  const ref = doc(db, 'tables', String(tableNumber));
-  await updateDoc(ref, {
-    status: 'ordered',
-    orderedAt: Timestamp.now(),
-    cookingAt: null,
-    readyAt: null,
-    acknowledgedAt: null,
-  });
-  triggerNotification(tableNumber, 'ordered');
-};
-
-/** COCINA: Confirma que recibió el pedido y está cocinando */
-export const confirmCooking = async (tableNumber) => {
-  const ref = doc(db, 'tables', String(tableNumber));
-  await updateDoc(ref, {
-    status: 'cooking',
-    cookingAt: Timestamp.now(),
-  });
-};
-
-/** COCINA: El pedido está listo para entregar */
-export const markTableReady = async (tableNumber) => {
-  const ref = doc(db, 'tables', String(tableNumber));
-  await updateDoc(ref, {
-    status: 'ready',
-    readyAt: Timestamp.now(),
-  });
-  triggerNotification(tableNumber, 'ready');
-};
-
-/** MOZO: Confirma que va a buscar el pedido → mesa vuelve a libre */
-export const acknowledgeTable = async (tableNumber) => {
-  const ref = doc(db, 'tables', String(tableNumber));
-  await updateDoc(ref, {
-    status: 'idle',
-    orderedAt: null,
-    cookingAt: null,
-    readyAt: null,
-    acknowledgedAt: Timestamp.now(),
-  });
-};
-
-/** Cancela cualquier estado y vuelve a libre (cocinero o mozo) */
-export const resetTable = async (tableNumber) => {
-  const ref = doc(db, 'tables', String(tableNumber));
-  await updateDoc(ref, {
-    status: 'idle',
-    orderedAt: null,
-    cookingAt: null,
-    readyAt: null,
-    acknowledgedAt: null,
-  });
-};
-
 /** Primera vez: crea los 40 documentos de mesas en Firestore */
 export const initializeTables = async () => {
   const batch = writeBatch(db);
